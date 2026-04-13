@@ -1,0 +1,12 @@
+
+LƯU Ý KHI LẤY DATA (dành cho folder 'pretrained')
+1. CHỈ 1 GIỌNG DUY NHẤT (trộn nhiều giọng → output không ổn định)
+2. NÊN CÓ KÈM FILE TEXT (đặt tên file text và audio giống nhau, VD: clip1.mp3 + clip1.txt)
+   → App dùng text để chọn window 80s đa dạng âm vị nhất
+3. ĐỘ DÀI AUDIO: không giới hạn — càng nhiều giờ càng tốt
+   → speaker_emb và x-vector: tính từ TOÀN BỘ audio (không cắt)
+   → Acoustic context (Perceiver Average): tổng hợp từ tối đa 20 cửa sổ×80s ≈ 26 phút
+
+Audio prompt khi chạy app nên cùng giọng với audio dùng để build profile.
+Kết quả sau khi build là file 'conds.pt' trong folder 'model-after-RL/'.
+Nhấn 'Copy → modelTTSLocal' để app dùng ngay (cần restart app).
