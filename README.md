@@ -1,5 +1,3 @@
-<div align="center">
-
 # 🎙️ Betterbox TTS
 
 ### app base trên Vitterbox tts: https://github.com/iamdinhthuan/viterbox-tts
@@ -84,6 +82,7 @@ hoặc sau khi có venv, thì chạy file 'runApp.bat' - file tự động bật
 - **temperature**: Tăng để giọng đa dạng hơn, giảm để ổn định hơn
 - **sentence_pause_ms**: Thời gian nghỉ giữa các câu (hữu ích cho văn bản dài)
 - **Pitch Shift (semitones)**: cao độ (tone) của giọng đầu ra
+
 ---
 
 ## 📁 Cấu trúc dự án
@@ -181,10 +180,6 @@ Liên hệ thương mại: [contextbox.ai](https://contextbox.ai)
 
 ---
 
-<div align="center">
-
 **Made with ❤️ by [Dolly VN](https://github.com/dolly-vn) @ [ContextBoxAI](https://contextbox.ai)**
 
-[⬆ Về đầu trang](#️-viterbox)
-
-</div>
+[⬆ Về đầu trang](#️-betterbox-tts)
