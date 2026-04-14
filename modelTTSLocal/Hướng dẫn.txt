@@ -1,3 +1,0 @@
-tải model ở: https://huggingface.co/dolly-vn/viterbox/tree/main
-
-nhớ đừng copy đè file 'conds.pt' (1,398 KB), đây là file audio prompt cho giọng 'reference_sound.wav' có sẵn trong source. tăng độ chính xác khi TTS

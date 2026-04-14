@@ -10,14 +10,6 @@ import librosa
 # dựa trên phân tích thực tế tokenizer JSON (BPE, NFC, vocab filtering)
 from .tts_precision import config_token_for_precision
 
-try:
-    from soe_vinorm import SoeNormalizer
-    _normalizer = SoeNormalizer()
-    HAS_VINORM = True
-except ImportError:
-    HAS_VINORM = False
-    _normalizer = None
-
 # ── Pause config ──────────────────────────────────────────
 # Pause durations (ms) per punctuation class
 _PUNCT_PAUSE_MS = {
@@ -200,14 +192,7 @@ def addConfigText(text: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def normalize_text(text: str, language: str = "vi") -> str:
-    """Normalize Vietnamese text (numbers, abbreviations, etc.)"""
-    if language == "vi" and HAS_VINORM and _normalizer is not None:
-        try:
-            text = _normalizer.normalize(text)
-            text = re.sub(r'\s*,\s*', ', ', text)  # chuẩn hóa " , " → ", "
-            return text
-        except Exception:
-            return text
+    """Normalize text hook (currently pass-through)."""
     return text
 
 

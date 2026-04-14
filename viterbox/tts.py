@@ -20,7 +20,7 @@ from .models.s3gen import S3Gen, S3GEN_SR
 from .models.s3tokenizer import S3_SR, drop_invalid_tokens
 from .models.voice_encoder import VoiceEncoder
 from .models.tokenizers import MTLTokenizer
-from .emotional_audio_profiles import get_emotional_audio_profile, get_profile_description
+from general.EQ_emotion_config.eq_emotional_profiles import get_emotional_audio_profile, get_profile_description
 
 from .tts_helper.tts_support import (
     SEGMENT_TEXT,
@@ -83,14 +83,14 @@ class Viterbox(ViterboxExtensionMixin):
         device: str = "cuda",
         emotional_profile: Optional[str] = None,
     ) -> 'Viterbox':
-        """Load model từ thư mục modelTTSLocal ở root project."""
-        # Thư mục modelTTSLocal nằm ở root project (2 cấp trên viterbox/tts.py)
-        local_model_dir = Path(__file__).parent.parent / "modelTTSLocal"
+        """Load model từ thư mục viterbox/modelViterboxLocal trong project."""
+        # modelViterboxLocal nằm trong thư mục package viterbox/
+        local_model_dir = Path(__file__).parent / "modelViterboxLocal"
 
         if not local_model_dir.exists():
             raise FileNotFoundError(
-                f"Không tìm thấy thư mục modelTTSLocal tại: {local_model_dir}\n"
-                f"Hãy đảm bảo thư mục modelTTSLocal/ tồn tại ở root project."
+                f"Không tìm thấy thư mục modelViterboxLocal tại: {local_model_dir}\n"
+                f"Hãy đảm bảo thư mục viterbox/modelViterboxLocal/ tồn tại trong project."
             )
 
         return cls.load_local_model(local_model_dir, device, emotional_profile)
@@ -412,11 +412,11 @@ class Viterbox(ViterboxExtensionMixin):
             silence = np.zeros(int(self.sr * ms / 1000), dtype=result.dtype)
             result  = np.concatenate([result, silence, audio_pieces[i]])
 
-        # nếu dấu câu dài quá, thì giới hạn mức 250ms cho mỗi dấu câu
+        # nếu dấu câu dài quá, thì giới hạn mức 200ms cho mỗi dấu câu
         result = fix_silent_and_speed_audio(
             result,
             self.sr,
-            threshold_ms=250,
+            threshold_ms=200,
             silence_threshold_db=-60,
         )
 
@@ -441,7 +441,8 @@ class Viterbox(ViterboxExtensionMixin):
             result = np.concatenate([result, silence], axis=0)
 
         print(f"\n------------------ CREATE TTS ✅ done, CREATE TTS ✅ done, CREATE TTS ✅ done--------------------------")
-        print(f"-------------------------------------------------------------------------------------------------------\n")
+        print(f"===========================================================================================================")
+        print(f"===========================================================================================================\n\n\n")
 
         return torch.from_numpy(result).unsqueeze(0)
 

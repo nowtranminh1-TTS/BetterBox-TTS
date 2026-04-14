@@ -1,0 +1,24 @@
+# Windows + NVIDIA (CUDA 12.8): dòng --extra-index-url giúp pip lấy wheel GPU.
+# macOS/Linux: pip vẫn cài đúng wheel từ PyPI chính (không có bản CUDA cho Mac).
+# Nếu trên Mac gặp lỗi resolve torch: dùng requirements-mac.txt thay cho file này.
+#
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.8.0
+torchaudio==2.8.0
+safetensors==0.5.3
+huggingface_hub>=1.5.0,<2.0
+git+https://github.com/huggingface/transformers.git
+accelerate>=0.33.0
+librosa==0.11.0
+scipy>=1.10.0
+soundfile>=0.12.0
+numpy>=1.24.0,<1.26.0
+gradio>=5.49.0
+einops>=0.7.0
+conformer==0.3.2
+s3tokenizer
+diffusers==0.29.0
+resemble-perth==1.0.1
+omegaconf==2.3.0
+pedalboard
+pydub

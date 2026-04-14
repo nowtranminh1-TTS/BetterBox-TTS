@@ -22,7 +22,7 @@ from ..models.t3 import T3, T3Config
 from ..models.s3gen import S3Gen
 from ..models.voice_encoder import VoiceEncoder
 from ..models.tokenizers import MTLTokenizer
-from ..emotional_audio_profiles import (
+from general.EQ_emotion_config.eq_emotional_profiles import (
     get_emotional_audio_profile,
     apply_amplitude_envelope,
     list_emotional_profiles as _list_emotional_profiles,

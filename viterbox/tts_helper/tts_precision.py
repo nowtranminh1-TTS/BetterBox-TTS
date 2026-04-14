@@ -73,9 +73,9 @@ def _load_vocab_charset(tokenizer_path: Optional[str] = None) -> Set[str]:
     """
     if tokenizer_path is None:
         # Tìm tokenizer_vi_expanded.json tự động
-        # Cấu trúc: viterbox/tts_helper/tts_precision.py → lên 3 cấp → modelTTSLocal/
+        # Cấu trúc: viterbox/tts_helper/tts_precision.py → lên 1 cấp → viterbox/modelViterboxLocal/
         _this_dir = Path(__file__).parent
-        tokenizer_path = str(_this_dir.parent.parent / "modelTTSLocal" / "tokenizer_vi_expanded.json")
+        tokenizer_path = str(_this_dir.parent / "modelViterboxLocal" / "tokenizer_vi_expanded.json")
 
     try:
         with open(tokenizer_path, 'r', encoding='utf-8') as f:
@@ -440,7 +440,7 @@ def debug_token_analysis(text: str, tokenizer_path: Optional[str] = None):
         if tokenizer_path is None:
             _this_dir = Path(__file__).parent
             tokenizer_path = str(
-                _this_dir.parent.parent / "modelTTSLocal" / "tokenizer_vi_expanded.json"
+                _this_dir.parent / "modelViterboxLocal" / "tokenizer_vi_expanded.json"
             )
 
         tok = Tokenizer.from_file(tokenizer_path)

@@ -14,12 +14,12 @@ import soundfile as sf
 from pathlib import Path
 from typing import Optional
 
-from viterbox.emotional_audio_profiles import get_profile_description
+from general.EQ_emotion_config.eq_emotional_profiles import get_profile_description
 from viterbox.AI_emotion_config import get_model_emotion_profile
 
 
 # ── Hằng số ───────────────────────────────────────────────────────────────────
-SAVE_FILE = "config_path.txt"
+SAVE_FILE = "general/config_path.txt"
 
 
 def _pyinstaller_bundle_dir() -> Path | None:
@@ -153,7 +153,7 @@ def save_generated_audio(audio_data, text: str, folder_path: str, sequence_numbe
 
 # ── Generate speech ───────────────────────────────────────────────────────────
 
-def generate_speech(
+def generate_speech_viterbox(
     MODEL,
     text: str,
     language: str = "vi",
@@ -248,7 +248,7 @@ def generate_speech(
 
 def run_build_voice_profile(MODEL, PRETRAINED_DIR, OUTPUT_DIR, build_voice_profile_fn, exaggeration_val: float) -> str:
     """
-    Wrapper để Gradio gọi: build voice profile từ folder pretrained/.
+    Wrapper để Gradio gọi: build voice profile từ folder viterbox/pretrained/.
     Truyền MODEL đang chạy vào để tái sử dụng — không cần load model mới.
 
     Log được gom lại thành chuỗi và trả về Textbox trong UI.
@@ -270,7 +270,7 @@ def run_build_voice_profile(MODEL, PRETRAINED_DIR, OUTPUT_DIR, build_voice_profi
 
 def run_copy_profile_to_model(OUTPUT_DIR, MODEL_DIR, copy_profile_fn) -> str:
     """
-    Wrapper để Gradio gọi: copy conds.pt từ model-after-RL/ sang modelTTSLocal/.
+    Wrapper để Gradio gọi: copy conds.pt từ viterbox/output-profile/ sang viterbox/modelViterboxLocal/.
     Backup file cũ tự động trước khi ghi đè.
     """
     lines = []

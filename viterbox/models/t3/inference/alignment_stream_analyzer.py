@@ -84,6 +84,11 @@ class AlignmentStreamAnalyzer:
             - When `output_attentions=True`, `LlamaSdpaAttention.forward` calls `LlamaAttention.forward`.
             - `attn_output` has shape [B, H, T0, T0] for the 0th entry, and [B, H, 1, T0+i] for the rest i-th.
             """
+            # Some attention backends return `attn_weights=None` even when
+            # output_attentions=True. In that case, skip alignment update safely.
+            if output is None or len(output) < 2 or output[1] is None:
+                self.last_aligned_attn = None
+                return
             step_attention = output[1].cpu() # (B, 16, N, N)
             self.last_aligned_attn = step_attention[0].mean(0) # (N, N)
 
@@ -105,6 +110,9 @@ class AlignmentStreamAnalyzer:
         """
         # extract approximate alignment matrix chunk (1 frame at a time after the first chunk)
         aligned_attn = self.last_aligned_attn # (N, N)
+        if aligned_attn is None:
+            self.curr_frame_pos += 1
+            return logits
         i, j = self.text_tokens_slice
         if self.curr_frame_pos == 0:
             # first chunk has conditioning info, text tokens, and BOS token

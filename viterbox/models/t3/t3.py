@@ -325,9 +325,18 @@ class T3(nn.Module):
             return_dict=True,
         )
         # Initialize kv_cache with the full context.
-        past = DynamicCache()
-        for layer_idx, (k, v) in enumerate(output.past_key_values):
-            past.update(k, v, layer_idx)
+        # Newer transformers may return cache entries with more than 2 values
+        # (e.g. extra metadata), so only use the first (k, v) tensors.
+        pkv = output.past_key_values
+        if isinstance(pkv, DynamicCache):
+            past = pkv
+        else:
+            past = DynamicCache()
+            for layer_idx, layer_cache in enumerate(pkv):
+                if not isinstance(layer_cache, (tuple, list)) or len(layer_cache) < 2:
+                    continue
+                k, v = layer_cache[0], layer_cache[1]
+                past.update(k, v, layer_idx)
 
         # ---- Generation Loop using kv_cache ----
         for i in tqdm(range(max_new_tokens), desc="Sampling", dynamic_ncols=True):

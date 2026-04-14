@@ -1,8 +1,13 @@
-# 🎙️ Betterbox TTS
+# 🎙️ Betterbox TTS - V2
 
 ### app base trên Vitterbox tts: https://github.com/iamdinhthuan/viterbox-tts
 
-## một số tính năng mới 
+## một số tính năng mới - chung: 
+- 1. bổ sung tùy chọn model Omnivoice hoặc Viterbox ngoài UI. click chọn là chạy.
+- 2. fix bug UI
+- Note: hiện model Omnivoice còn thô sơ, chưa có chức năng ngắt câu theo dấu câu.  
+
+## một số tính năng mới - cho model Viterbox
 - 1. thêm điều chỉnh tốc độ trực tiếp trong model s3gen
 - 2. bỏ giới hạn chỉ 6 giây audio mẫu - giờ audio mẫu lên tối đa 80 giây - tăng độ chính xác khi TTS, nhưng chờ lâu
 - 3. thêm tính năng 'Voice Profile Builder'. tối đa 26 phút audio -> giống với audio prompt, nhưng chỉ làm 1 lần, không ảnh hưởng hiệu năng khi TTS như audio prompt
@@ -13,23 +18,63 @@
 - 8. fix lỗi nuốt chữ.
 - 9. thêm runApp.bat - sau khi có venv và cài thư viện với venv, chỉ cần click file này là chạy app
 - 10. tính năng 'Thứ tự:', cho phép file audio có thêm mục số ở đầu tên
-- 11. tính năng 'advance-TTS'. gen từng chữ, rồi ghép lại, độ chính xác siêu cao, nhưng âm thanh hơi kỳ 😁
+- 11. tính năng 'advance TTS' - cho câu rất chính xác, nhưng nghe như robot 😁
 
-# tải model và đưa vào folder 'modelTTSLocal' (tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
+# 🔧 tải model viterbox TTS và đưa vào folder 'viterbox/modelViterboxLocal' 
+(tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
 https://huggingface.co/dolly-vn/viterbox/tree/main
 
-# demo app:
-https://github.com/user-attachments/assets/9ff920e3-6779-49c2-b61f-67a841295635
+
+# 🔧 tải model Omnivoice và đưa vào folder 'OmniVoice/modelOmniLocal' 
+https://huggingface.co/k2-fsa/OmniVoice/tree/main
 
 
-## 📦 Cài đặt
+
+## 📁 Cấu trúc dự án
+
+```
+viterbox-TTS=GPU/
+├── app.py                  # Gradio Web UI
+├── inference.py            # CLI inference script
+└── general/                # Core library
+    ├── general/requirements.txt    # Dependencies (Windows/Linux)
+    ├── general/requirements-mac.txt# Dependencies (macOS)
+    ├── config_path.txt     # lưu đường dẫn folder download audio
+    └── EQ_emotion_config/  # chứa các file config âm thanh bằng EQ
+├── pyproject.toml          # Package config
+├── README.md
+├── wavs/                   # Thư mục chứa giọng mẫu
+│   └── *.wav
+├── OmniVoice/              # folder với model OmniVoice + file inference
+│   ├── modelOmniLocal/     # Thư mục chứa model local OmniVoice
+│   ├── omnivoice/          # Model components OmniVoice
+│   └── omnivoice_inference/# Folder chứa phần suy luận của OmniVoice
+│       ├── ttsOmni.py      # File suy luận cho Omnivoice
+└── viterbox/               # Core library
+    ├── modelViterboxLocal/ # Thư mục chứa model local Viterbox(base trên Chatterbox)
+    ├── output-profile/     # Thư mục chứa file kết quả của Voice Profile
+    ├── pretrained/         # Thư mục chứa audio + text cho Voice Profile
+    ├── __init__.py
+    ├── tts.py              # Main Viterbox class
+    └── models/             # Model components
+        ├── t3/             # T3 Text-to-Token model
+        ├── s3gen/          # S3Gen vocoder
+        ├── s3tokenizer/    # Speech tokenizer
+        ├── voice_encoder/  # Speaker encoder
+        └── tokenizers/     # Text tokenizer
+```
+
+---
+
+## 📦 Cài đặt - cách cài đặt venv và thư viện ở bản V2 thì y như cũ
 
 ### Yêu cầu hệ thống
 
 - **Python**: 3.10+
 - **CUDA**: 11.8+ (khuyến nghị)
 - **RAM**: 8GB+
-- **VRAM**: 6GB+ (GPU) (10GB+ nếu xài từ 20 phút chức năng 'Voice Profile Builder')
+- **VRAM**: 6GB+ (GPU) - 8GB nếu xài Omnivoice 
+(10GB+ nếu xài từ 20 phút chức năng 'Voice Profile Builder' của Viterbox)
 
 ### Cài đặt từ source
 
@@ -43,7 +88,7 @@ source venv/bin/activate  # Linux/Mac
 # hoặc: venv\Scripts\activate  # Windows
 
 # Cài đặt dependencies
-pip install -r requirements.txt
+pip install -r general/requirements.txt
 ```
 
 ### Cài đặt với pip
@@ -67,6 +112,12 @@ Mở trình duyệt tại `http://localhost:7860`
 hoặc sau khi có venv, thì chạy file 'runApp.bat' - file tự động bật venv và chạy
 
 ---
+
+## 👉👉👉 Thông số dành cho model Omnivoice
+- xem trên: https://huggingface.co/k2-fsa/OmniVoice
+- cấu hình khi chạy Omnivoice: 7GB VRAM - nếu thiếu sẽ tự load một phần lên RAM, nhưng sẽ chậm
+
+## 👉👉👉 Thông số dành cho model viterbox tts
 
 ## 🎛️ Tham số
 
@@ -93,54 +144,10 @@ hoặc sau khi có venv, thì chạy file 'runApp.bat' - file tự động bật
 
 ---
 
-## 📁 Cấu trúc dự án
-
-```
-viterbox/
-├── app.py                  # Gradio Web UI
-├── inference.py            # CLI inference script
-├── requirements.txt        # Dependencies
-├── pyproject.toml          # Package config
-├── README.md
-├── wavs/                   # Thư mục chứa giọng mẫu
-│   └── *.wav
-├── modelTTSLocal/          # Thư mục chứa model local
-├── output-profile/         # Thư mục chứa file kết quả của Voice Profile
-├── pretrained/             # Thư mục chứa audio + text cho Voice Profile
-└── viterbox/               # Core library
-    ├── __init__.py
-    ├── tts.py              # Main Viterbox class
-    └── models/             # Model components
-        ├── t3/             # T3 Text-to-Token model
-        ├── s3gen/          # S3Gen vocoder
-        ├── s3tokenizer/    # Speech tokenizer
-        ├── voice_encoder/  # Speaker encoder
-        └── tokenizers/     # Text tokenizer
-```
-
----
-
-## 🔧 Model Files
-
-source được fix lại để model chạy local, không tự tải về. 
-model sau khi download xong, thì đặt trong folder 'modelTTSLocal'
-sau đó, để nâng cao chất lượng TTS đầu ra, cần copy đè file 'conds.pt' trong folder 'output-profile' vào trong folder 'modelTTSLocal'
-
-Model được host trên HuggingFace Hub: [`dolly-vn/viterbox`](https://huggingface.co/dolly-vn/viterbox)
-
-| File | Mô tả | Kích thước |
-|------|-------|------------|
-| `t3_ml24ls_v2.safetensors` | T3 model (fine-tuned) | ~2GB |
-| `s3gen.pt` | S3Gen vocoder | ~1GB |
-| `ve.pt` | Voice Encoder | ~20MB |
-| `tokenizer_vi_expanded.json` | Tokenizer với vocab tiếng Việt | ~50KB |
-| `conds.pt` | Default voice conditioning | ~1MB |
-
----
 
 ## 🧠 Lưu ý khi tạo Voice Profile
 
-Áp dụng cho dữ liệu trong folder `pretrained/`:
+Áp dụng cho dữ liệu trong folder `viterbox/pretrained/`:
 
 1. **Chỉ dùng 1 giọng duy nhất**  
    Trộn nhiều giọng sẽ làm output không ổn định.
@@ -150,11 +157,11 @@ Model được host trên HuggingFace Hub: [`dolly-vn/viterbox`](https://hugging
 3. **Độ dài audio tối đa 26 phút - nên để 25 phút thôi**  
    `speaker_emb` và `x-vector` được tính từ toàn bộ audio (không cắt 80s).  
    Acoustic context (Perceiver Average) tổng hợp từ tối đa 20 cửa sổ x 80s (~26 phút).
-4. trong folder 'pretrained' đã để sẵn audio và text (tạo bởi AI) để chạy chức năng này
+4. trong folder 'viterbox/pretrained' đã để sẵn audio và text (tạo bởi AI) để chạy chức năng này
 
 Audio prompt khi chạy app nên cùng giọng với audio đã dùng để build profile.  
-Kết quả build là file `conds.pt` trong `output-profile/`.  
-Dùng nút `Copy -> modelTTSLocal` để app dùng ngay (cần restart app).
+Kết quả build là file `conds.pt` trong `viterbox/output-profile/`.  
+Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app), file sẽ được copy vào `viterbox/modelViterboxLocal/`.
 
 ---
 

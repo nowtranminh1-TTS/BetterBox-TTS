@@ -4,6 +4,7 @@ Viterbox - Gradio Web Interface
 import torch
 import warnings
 import gradio as gr
+import gc
 
 warnings.filterwarnings('ignore')
 
@@ -14,22 +15,18 @@ os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
 
 from pathlib import Path
 from viterbox import Viterbox
-from viterbox.emotional_audio_profiles import list_emotional_profiles, get_profile_description
+from OmniVoice.omnivoice_inference.ttsOmni import Omni, generate_speech_omni
+from general.EQ_emotion_config.eq_emotional_profiles import list_emotional_profiles, get_profile_description
 from viterbox.AI_emotion_config import get_model_emotion_choices
-from pretrain_voice_builder import build_voice_profile, copy_profile_to_model, PRETRAINED_DIR, OUTPUT_DIR, MODEL_DIR
+from viterbox.pretrain_voice_builder import build_voice_profile, copy_profile_to_model, PRETRAINED_DIR, OUTPUT_DIR, MODEL_DIR
 from app_support import (
     CSS,
     list_voices, _get_default_voice,
     save_path, load_path,
     save_generated_audio,
-    generate_speech,
+    generate_speech_viterbox,
     run_build_voice_profile, run_copy_profile_to_model,
 )
-
-# Load model
-print("=" * 50)
-print("🚀 Loading Viterbox...")
-print("=" * 50)
 
 if torch.cuda.is_available():
     DEVICE = "cuda"
@@ -39,26 +36,125 @@ else:
     DEVICE = "cpu"
 print(f"Device: {DEVICE}")
 
-MODEL = Viterbox.from_pretrained(DEVICE)
-print("✅ Model loaded!")
-print("=" * 50)
+# Lazy singleton model (load on first use)
+MODEL = None
+OMNI_MODEL = None
+ACTIVE_MODEL = None
 
 print("\n\n🎉 Ready for using TTS app 🎉\n\n")
 
+def _get_model_viterbox():
+    """Load model một lần duy nhất, các lần sau tái sử dụng."""
+    global MODEL
+    if MODEL is None:
+        print("=" * 50)
+        print("🚀 Loading Viterbox...")
+        print("=" * 50)
+        MODEL = Viterbox.from_pretrained(DEVICE)
+        print("✅ Model loaded!")
+        print("=" * 50)
+    return MODEL
+
+
+def _get_omni_model():
+    """Load Omni model one time and reuse."""
+    global OMNI_MODEL
+    if OMNI_MODEL is None:
+        print("=" * 50)
+        print("🚀 Loading OmniVoice...")
+        print("=" * 50)
+        OMNI_MODEL = Omni()
+        OMNI_MODEL.load()
+        print("✅ OmniVoice loaded!")
+        print("=" * 50)
+    return OMNI_MODEL
+
+
+def _release_viterbox_model():
+    global MODEL
+    if MODEL is not None:
+        MODEL = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def _release_omni_model():
+    global OMNI_MODEL
+    if OMNI_MODEL is not None:
+        OMNI_MODEL = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def _ensure_active_model(model_choice: str) -> bool:
+    """Keep only the selected model in RAM."""
+    global ACTIVE_MODEL
+    if model_choice == ACTIVE_MODEL:
+        print(f"\n👉 🔒[ModelRouter] Keep current model: {model_choice}")
+        return False
+
+    if model_choice == "omni":
+        print("\n👉 🔄[ModelRouter] Switching: viterbox -> omni")
+        _release_viterbox_model()
+    else:
+        print("\n👉 🔄[ModelRouter] Switching: omni -> viterbox")
+        _release_omni_model()
+
+    ACTIVE_MODEL = model_choice
+    print(f"\n👉 🚀[ModelRouter] Active model: {ACTIVE_MODEL}")
+    return True
 
 # ── Wrapper functions (inject MODEL + dirs into app_support functions) ─────────
 
-def _generate_speech(text, language, reference_audio, tts_mode,
+def _generate_speech(model_choice, text, language, reference_audio, tts_mode,
                      emotional_profile, exaggeration, model_emotion_profile,
                      ai_speed, ui_pitch_shift, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty):
-    return generate_speech(
-        MODEL, text, language, reference_audio, tts_mode,
-        emotional_profile, exaggeration, model_emotion_profile,
-        ai_speed, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty, ui_pitch_shift,
-    )
+    try:
+        switched = _ensure_active_model(model_choice)
+    except Exception as e:
+        return None, f"❌ Model switch error: {str(e)}"
+
+    if model_choice == "omni":
+        # inference với model omni
+        try:
+            omni_model = _get_omni_model()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None, f"❌ Omni load error: {str(e)}"
+
+        audio_out, status = generate_speech_omni(
+            omni=omni_model,
+            text=text,
+            language=language,
+            reference_audio=reference_audio,
+            speed=ai_speed,
+        )
+        if switched and status:
+            status = f"🔁 Switched to Omni | {status}"
+        return audio_out, status
+    else:
+        # inference với model viterbox
+        try:
+            model = _get_model_viterbox()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None, f"❌ Viterbox load error: {str(e)}"
+        audio_out, status = generate_speech_viterbox(
+            model, text, language, reference_audio, tts_mode,
+            emotional_profile, exaggeration, model_emotion_profile,
+            ai_speed, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty, ui_pitch_shift,
+        )
+        if switched and status:
+            status = f"🔁 Switched to Viterbox | {status}"
+        return audio_out, status
 
 def _run_build_voice_profile(exaggeration_val):
-    return run_build_voice_profile(MODEL, PRETRAINED_DIR, OUTPUT_DIR, build_voice_profile, exaggeration_val)
+    model = _get_model_viterbox()
+    return run_build_voice_profile(model, PRETRAINED_DIR, OUTPUT_DIR, build_voice_profile, exaggeration_val)
 
 def _run_copy_profile_to_model():
     return run_copy_profile_to_model(OUTPUT_DIR, MODEL_DIR, copy_profile_to_model)
@@ -66,6 +162,7 @@ def _run_copy_profile_to_model():
 def _update_model_emotion_controls(profile):
     is_custom = profile == "AI-custom"
     return (
+        gr.update(interactive=is_custom),
         gr.update(interactive=is_custom),
         gr.update(interactive=is_custom),
         gr.update(interactive=is_custom),
@@ -122,7 +219,7 @@ with gr.Blocks(
                 with gr.Column(elem_classes=["card"]):
                     gr.HTML(
                         '<div style="font-size:0.9rem; color:#ffffff; margin-bottom:0.5rem;">'
-                        'Gộp audio trong pretrained/ → tạo conditioning tối ưu → lưu vào output-profile/. '
+                        'Gộp audio trong viterbox/pretrained/ → tạo conditioning tối ưu → lưu vào viterbox/output-profile/. '
                         'Nhấn Copy để dùng ngay làm default (cần restart app).'
                         '</div>'
                     )
@@ -134,7 +231,7 @@ with gr.Blocks(
                             scale=3,
                         )
                         copy_profile_btn = gr.Button(
-                            "📋 Copy → modelTTSLocal",
+                            "📋 Copy → modelViterboxLocal",
                             variant="secondary",
                             size="sm",
                             scale=2,
@@ -155,6 +252,12 @@ with gr.Blocks(
                     step=1,
                     precision=0,
                     interactive=True,
+                )
+                model_choice = gr.Radio(
+                    choices=[("Viterbox", "viterbox"), ("Omni", "omni")],
+                    value="omni",
+                    label="Model",
+                    info="Chọn model để inference",
                 )
 
         # Right - Voice & Settings
@@ -320,12 +423,12 @@ with gr.Blocks(
     model_emotion.change(
         fn=_update_model_emotion_controls,
         inputs=[model_emotion],
-        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p],
+        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
     )
 
     generate_btn.click(
         fn=_generate_speech,
-        inputs=[text_input, language, ref_audio, tts_mode, 
+        inputs=[model_choice, text_input, language, ref_audio, tts_mode,
                 emotional_profile, exaggeration, model_emotion,
                 ai_speed, ui_pitch_shift, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
         outputs=[output_audio, status_text]
@@ -353,7 +456,7 @@ with gr.Blocks(
     demo.load(
         fn=_update_model_emotion_controls,
         inputs=[model_emotion],
-        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p],
+        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
     )
     demo.load(fn=lambda: 1, outputs=[numeric_input])
 
