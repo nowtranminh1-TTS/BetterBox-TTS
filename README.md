@@ -165,6 +165,13 @@ Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app)
 
 ---
 
+## DEMO APP 
+
+
+https://github.com/user-attachments/assets/9d761cfb-b1de-46c2-bf74-32b09c692403
+
+
+
 ## ⚠️ Lưu ý
 
 - **Audio mẫu**: Nên sử dụng audio sạch, không nhiễu, 3-10 giây
