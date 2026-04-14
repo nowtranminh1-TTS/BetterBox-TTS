@@ -13,6 +13,7 @@
 - 8. fix lỗi nuốt chữ.
 - 9. thêm runApp.bat - sau khi có venv và cài thư viện với venv, chỉ cần click file này là chạy app
 - 10. tính năng 'Thứ tự:', cho phép file audio có thêm mục số ở đầu tên
+- 11. tính năng 'advance-TTS'. gen từng chữ, rồi ghép lại, độ chính xác siêu cao, nhưng âm thanh hơi kỳ 😁
 
 # tải model và đưa vào folder 'modelTTSLocal' (tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
 https://huggingface.co/dolly-vn/viterbox/tree/main
