@@ -49,7 +49,7 @@ viterbox-TTS=GPU/
 │   ├── modelOmniLocal/     # Thư mục chứa model local OmniVoice
 │   ├── omnivoice/          # Model components OmniVoice
 │   └── omnivoice_inference/# Folder chứa phần suy luận của OmniVoice
-│       ├── ttsOmni.py      # File suy luận cho Omnivoice
+│       └── ttsOmni.py      # File suy luận cho Omnivoice
 └── viterbox/               # Core library
     ├── modelViterboxLocal/ # Thư mục chứa model local Viterbox(base trên Chatterbox)
     ├── output-profile/     # Thư mục chứa file kết quả của Voice Profile
