@@ -17,6 +17,10 @@
 # tải model và đưa vào folder 'modelTTSLocal' (tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
 https://huggingface.co/dolly-vn/viterbox/tree/main
 
+# demo app:
+https://github.com/user-attachments/assets/9ff920e3-6779-49c2-b61f-67a841295635
+
+
 ## 📦 Cài đặt
 
 ### Yêu cầu hệ thống
