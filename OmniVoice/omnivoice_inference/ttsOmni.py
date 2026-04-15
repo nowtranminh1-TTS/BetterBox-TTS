@@ -4,11 +4,17 @@ Minimal OmniVoice wrapper for Gradio app integration.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Optional, cast
 import sys
 
 import numpy as np
 import torch
+try:
+    from .omnivoice_support.ttsOmni_Config import inferWithModelOmni
+except ImportError:
+    from OmniVoice.omnivoice_inference.omnivoice_support.ttsOmni_Config import (
+        inferWithModelOmni,
+    )
 
 def _import_omnivoice_class():
     try:
@@ -38,58 +44,73 @@ class Omni:
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
         self.device = device or _best_device()
         self.model_path = self._resolve_model_path(model_path)
-        self.model = None
+        self.model: Optional[Any] = None
+
+    @staticmethod
+    def _validate_local_model_dir(model_dir: Path) -> None:
+        required_files = [
+            model_dir / "config.json",
+        ]
+        weight_candidates = [
+            model_dir / "model.safetensors",
+            model_dir / "pytorch_model.bin",
+            model_dir / "model.safetensors.index.json",
+            model_dir / "pytorch_model.bin.index.json",
+        ]
+
+        missing = [p for p in required_files if not p.exists()]
+        has_any_weight = any(p.exists() for p in weight_candidates)
+        if not has_any_weight:
+            # Show the expected weight file names for clarity.
+            missing.extend(weight_candidates)
+
+        if missing:
+            print("❌ Thiếu file quan trọng trong model Omni local. Không thể load:")
+            for p in missing:
+                print(f"- {p.as_posix()}")
+            raise FileNotFoundError(
+                f"Omni local model incomplete at '{model_dir.as_posix()}'. Missing required files."
+            )
 
     @staticmethod
     def _resolve_model_path(model_path: Optional[str]) -> str:
         if model_path:
             return model_path
 
-        local_candidates = [
-            Path("modelOmniLocal"),
-            Path("OmniVoice/modelOmniLocal"),
-        ]
-        for candidate in local_candidates:
-            if candidate.exists():
-                print(f"Model Omni local có tồn tại")
-                return str(candidate)
+        candidate = Path("OmniVoice/modelOmniLocal")
+        if candidate.exists():
+            if not candidate.is_dir():
+                print("❌ Model Omni local path tồn tại nhưng không phải thư mục:")
+                print(f"- {candidate.as_posix()}")
+                raise NotADirectoryError(candidate.as_posix())
 
-        print(f"Model Omni local KHÔNG tồn tại")
+            Omni._validate_local_model_dir(candidate)
+            print("🏠 Model Omni local có tồn tại\n")
+            return str(candidate)
+
+        print("Model Omni local KHÔNG tồn tại")
         return "k2-fsa/OmniVoice"
 
-    def loadModelOmni(self):
+    def loadModelOmni(self) -> Any:
         if self.model is None:
             dtype = torch.float16 if self.device != "cpu" else torch.float32
             omni_voice_cls = _import_omnivoice_class()
-            self.model = omni_voice_cls.from_pretrained(
+            model = cast(Any, omni_voice_cls.from_pretrained(
                 self.model_path,
                 dtype=dtype,
-            )
-            self.model = self.model.to(self.device)
-        return self.model
+            ))
+            model = model.to(self.device)
+            self.model = model
+        return cast(Any, self.model)
 
     def load(self):
         return self.loadModelOmni()
 
-    def infer(
-        self,
-        text: str,
-        reference_audio: str,
-        language: Optional[str] = None,
-        speed: float = 1.0,
-    ):
-        model = self.loadModelOmni()
-        print(f"\n🚩bắt đầu inference audio với model OmniVoice\n")
-        return model.generate(
-            text=text,
-            language=language,
-            ref_audio=reference_audio,
-            speed=speed,
-        )
+    _inferWithModelOmni = inferWithModelOmni
 
     @property
     def sampling_rate(self) -> int:
-        model = self.loadModelOmni()
+        model = cast(Any, self.loadModelOmni())
         return cast(int, model.sampling_rate)
 
 
@@ -105,8 +126,9 @@ def generate_speech_omni(
     if not reference_audio:
         return None, "❌ No reference audio! Add .wav files to wavs/ folder"
 
+    print("\n🚩bắt đầu inference audio với model OmniVoice\n")
     try:
-        audios = omni.infer(
+        audios = omni._inferWithModelOmni(
             text=text.strip(),
             reference_audio=reference_audio,
             language=language,
@@ -114,9 +136,21 @@ def generate_speech_omni(
         )
         audio_np = np.asarray(audios[0])
         if audio_np.size == 0:
-            return None, "❌ Omni returned empty audio. Try another reference_audio or shorter text."
+            print("⚠️ Omni trả về audio rỗng, retry với postprocess_output=False")
+            retry_audios = omni._inferWithModelOmni(
+                text=text.strip(),
+                reference_audio=reference_audio,
+                language=language,
+                speed=speed,
+            )
+            audio_np = np.asarray(retry_audios[0])
+            if audio_np.size == 0:
+                return None, "❌ Omni returned empty audio after retry. Try another reference_audio or shorter text."
         duration = len(audio_np) / omni.sampling_rate
         status = f"✅ Generated (Omni)! | {duration:.2f}s | {language.upper()}"
+
+        print(f"✅ done, đã inference xong với OmniVoice\n")
+
         return (omni.sampling_rate, audio_np), status
     except Exception as e:
         import traceback

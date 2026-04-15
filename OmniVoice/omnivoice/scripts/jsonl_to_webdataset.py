@@ -65,7 +65,8 @@ from concurrent.futures import (
 from itertools import islice
 from pathlib import Path
 
-import librosa
+import torch
+import torchaudio
 import webdataset as wds
 from tqdm import tqdm
 
@@ -172,7 +173,9 @@ def process_audio_item(meta, target_sr):
         meta["audio_duration"] = audio_duration
 
         if target_sr and sr != target_sr:
-            waveform = librosa.resample(waveform, orig_sr=sr, target_sr=target_sr)
+            waveform = torchaudio.functional.resample(
+                torch.from_numpy(waveform), orig_freq=sr, new_freq=target_sr
+            ).numpy()
             sr = target_sr
 
         audio_buffer = io.BytesIO()

@@ -14,6 +14,8 @@ os.environ["GRADIO_TEMP_DIR"] = tempfile.gettempdir() + "/my_gradio_tmp"
 os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
 
 from pathlib import Path
+from typing import cast
+from gradio.components.textbox import InputHTMLAttributes
 from viterbox import Viterbox
 from OmniVoice.omnivoice_inference.ttsOmni import Omni, generate_speech_omni
 from general.EQ_emotion_config.eq_emotional_profiles import list_emotional_profiles, get_profile_description
@@ -159,6 +161,19 @@ def _run_build_voice_profile(exaggeration_val):
 def _run_copy_profile_to_model():
     return run_copy_profile_to_model(OUTPUT_DIR, MODEL_DIR, copy_profile_to_model)
 
+# Thuộc tính HTML gắn trực tiếp lên ô nhập (Gradio ≥ 4) — tắt spellcheck trình duyệt cho tiếng Việt.
+TTS_TEXT_HTML_ATTRS = cast(
+    InputHTMLAttributes,
+    {
+        "spellcheck": False,
+        "autocorrect": "off",
+        "autocapitalize": "off",
+        "autocomplete": "off",
+        "lang": "vi",
+    },
+)
+
+
 def _update_model_emotion_controls(profile):
     is_custom = profile == "AI-custom"
     return (
@@ -177,11 +192,59 @@ with gr.Blocks(
     css=CSS,
     js="""
     function() {
-        setTimeout(() => {
-            document.querySelectorAll('textarea').forEach(el => {
-                el.setAttribute('spellcheck', 'false');
+        const disableSpellcheck = (root = document) => {
+            // Set global lang to Vietnamese
+            document.documentElement.setAttribute('lang', 'vi');
+            
+            const process = (el) => {
+                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                    el.setAttribute('spellcheck', 'false');
+                    el.setAttribute('autocomplete', 'off');
+                    el.setAttribute('autocorrect', 'off');
+                    el.setAttribute('autocapitalize', 'off');
+                    el.setAttribute('lang', 'vi');
+                    el.spellcheck = false;
+                    
+                    // Re-apply on focus just in case browser overrides it
+                    if (!el.dataset.spellcheckFixed) {
+                        el.addEventListener('focus', () => {
+                            el.setAttribute('spellcheck', 'false');
+                            el.spellcheck = false;
+                        });
+                        el.dataset.spellcheckFixed = 'true';
+                    }
+                }
+                
+                // Traverse shadow roots (important for newer Gradio/Web Components)
+                if (el.shadowRoot) {
+                    el.shadowRoot.querySelectorAll('textarea, input').forEach(process);
+                }
+            };
+
+            root.querySelectorAll('textarea, input').forEach(process);
+            
+            // Also check special Gradio components that might have shadow roots
+            root.querySelectorAll('*').forEach(el => {
+                if (el.shadowRoot) {
+                    process(el);
+                }
             });
-        }, 1000);
+        };
+        
+        // Initial setup with multiple delays to catch late-rendering components
+        [100, 500, 1000, 2000, 5000].forEach(delay => {
+            setTimeout(() => disableSpellcheck(), delay);
+        });
+        
+        // Robust observer for dynamic Gradio updates
+        const observer = new MutationObserver((mutations) => {
+            disableSpellcheck();
+        });
+        
+        observer.observe(document.body, { 
+            childList: true, 
+            subtree: true 
+        });
     }
     """
 ) as demo:
@@ -208,7 +271,9 @@ with gr.Blocks(
             text_input = gr.Textbox(
                 label="Text to Synthesize",
                 placeholder="Nhập văn bản cần đọc...",
-                lines=5
+                lines=5,
+                elem_id="main-text-input",
+                html_attributes=TTS_TEXT_HTML_ATTRS,
             )
 
             with gr.Row():

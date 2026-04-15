@@ -27,9 +27,10 @@ with shape ``(C, T)`` (channels-first).
 import io
 import logging
 
-import librosa
 import numpy as np
 import soundfile as sf
+import torch
+import torchaudio
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence, detect_nonsilent, split_on_silence
 
@@ -57,6 +58,8 @@ def load_waveform(audio_path: str):
         return data.T, sr  # (T, C) → (C, T)
     except Exception:
         # soundfile cannot handle MP3/M4A etc., fall back to librosa.
+        import librosa
+
         data, sr = librosa.load(audio_path, sr=None, mono=False)
         if data.ndim == 1:
             data = data[np.newaxis, :]
@@ -78,11 +81,9 @@ def load_audio(audio_path: str, sampling_rate: int) -> np.ndarray:
     if data.shape[0] > 1:
         data = np.mean(data, axis=0, keepdims=True)
     if sr != sampling_rate:
-        data = librosa.resample(
-            data,
-            orig_sr=sr,
-            target_sr=sampling_rate,
-        )
+        data = torchaudio.functional.resample(
+            torch.from_numpy(data), orig_freq=sr, new_freq=sampling_rate
+        ).numpy()
 
     return data
 
@@ -103,6 +104,8 @@ def load_audio_bytes(raw: bytes, sampling_rate: int) -> np.ndarray:
         data, sr = sf.read(buf, dtype="float32", always_2d=True)
         data = data.T  # (T, C) → (C, T)
     except Exception:
+        import librosa
+
         buf.seek(0)
         data, sr = librosa.load(buf, sr=None, mono=False)
         if data.ndim == 1:
@@ -111,11 +114,9 @@ def load_audio_bytes(raw: bytes, sampling_rate: int) -> np.ndarray:
     if data.shape[0] > 1:
         data = np.mean(data, axis=0, keepdims=True)
     if sr != sampling_rate:
-        data = librosa.resample(
-            data,
-            orig_sr=sr,
-            target_sr=sampling_rate,
-        )
+        data = torchaudio.functional.resample(
+            torch.from_numpy(data), orig_freq=sr, new_freq=sampling_rate
+        ).numpy()
 
     return data
 
