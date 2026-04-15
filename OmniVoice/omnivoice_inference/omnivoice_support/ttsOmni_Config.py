@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
+if TYPE_CHECKING:
+    # Relative import: 3 levels up (omnivoice_support -> omnivoice_inference -> OmniVoice root)
+    from ...omnivoice.models.omnivoice import OmniVoice
 
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
@@ -56,7 +60,7 @@ def inferWithModelOmni(
     # audio_chunk_threshold: tăng cao để HẠN CHẾ chunking (ít đứt mạch, thường chính xác hơn cho câu vừa/ngắn).
     audio_chunk_threshold: Optional[float] = 60.0  # tối thiểu: 10.0, tối đa: 60.0 | khuyến nghị chính xác: 45-60
 
-    model = cast(Any, self.loadModelOmni())
+    model: OmniVoice = self.loadModelOmni()  # type: ignore[assignment]
     
     generate_kwargs = {
         "text": text,

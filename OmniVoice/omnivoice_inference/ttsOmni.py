@@ -126,8 +126,11 @@ def generate_speech_omni(
     if not reference_audio:
         return None, "❌ No reference audio! Add .wav files to wavs/ folder"
 
-    print("\n🚩bắt đầu inference audio với model OmniVoice\n")
+    print(f"\n🚩bắt đầu inference audio với model OmniVoice: speed={speed}", flush=True)
     try:
+        # Debug: Show speed effect on estimated duration
+        if speed != 1.0:
+            print(f"   📊 Speed {speed} sẽ tạo audio {'ngắn hơn' if speed > 1 else 'dài hơn'} ~{abs(speed-1)*100:.0f}% so với speed=1.0", flush=True)
         audios = omni._inferWithModelOmni(
             text=text.strip(),
             reference_audio=reference_audio,
@@ -136,20 +139,12 @@ def generate_speech_omni(
         )
         audio_np = np.asarray(audios[0])
         if audio_np.size == 0:
-            print("⚠️ Omni trả về audio rỗng, retry với postprocess_output=False")
-            retry_audios = omni._inferWithModelOmni(
-                text=text.strip(),
-                reference_audio=reference_audio,
-                language=language,
-                speed=speed,
-            )
-            audio_np = np.asarray(retry_audios[0])
-            if audio_np.size == 0:
-                return None, "❌ Omni returned empty audio after retry. Try another reference_audio or shorter text."
+            print("⚠️ Omni trả về audio rỗng, đang có vấn đề gì đó, hãy check code\n", flush=True)
+            return None, "❌ Omni returned empty audio after retry. Try another reference_audio or shorter text."
         duration = len(audio_np) / omni.sampling_rate
         status = f"✅ Generated (Omni)! | {duration:.2f}s | {language.upper()}"
 
-        print(f"✅ done, đã inference xong với OmniVoice\n")
+        print(f"✅ done, đã inference xong với OmniVoice | duration={duration:.2f}s\n", flush=True)
 
         return (omni.sampling_rate, audio_np), status
     except Exception as e:

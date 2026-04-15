@@ -4,7 +4,6 @@ Viterbox - Gradio Web Interface
 import torch
 import warnings
 import gradio as gr
-import gc
 
 warnings.filterwarnings('ignore')
 
@@ -16,17 +15,27 @@ os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
 from pathlib import Path
 from typing import cast
 from gradio.components.textbox import InputHTMLAttributes
-from viterbox import Viterbox
-from OmniVoice.omnivoice_inference.ttsOmni import Omni, generate_speech_omni
+from OmniVoice.omnivoice_inference.ttsOmni import generate_speech_omni
 from general.EQ_emotion_config.eq_emotional_profiles import list_emotional_profiles, get_profile_description
-from viterbox.AI_emotion_config import get_model_emotion_choices
 from viterbox.pretrain_voice_builder import build_voice_profile, copy_profile_to_model, PRETRAINED_DIR, OUTPUT_DIR, MODEL_DIR
-from app_support import (
-    CSS,
+from viterbox.tts_generate_speech import generate_speech_viterbox
+from ui_app_Support.app_ui.app_ui_viterbox_tts import (
+    viterbox_UI_advance_AI_config,
+    viterbox_bind_advanced_ai_config_actions,
+    viterbox_UI_build_voice_profile,
+    viterbox_bind_voice_profile_actions,
+)
+from ui_app_Support.app_support.app_model_management import (
+    configure_device,
+    ensure_active_model,
+    get_model_viterbox,
+    get_omni_model,
+)
+from ui_app_Support.app_support.app_support import (
+    CSS, APP_INIT_JS,
     list_voices, _get_default_voice,
     save_path, load_path,
     save_generated_audio,
-    generate_speech_viterbox,
     run_build_voice_profile, run_copy_profile_to_model,
 )
 
@@ -38,124 +47,12 @@ else:
     DEVICE = "cpu"
 print(f"Device: {DEVICE}")
 
-# Lazy singleton model (load on first use)
-MODEL = None
-OMNI_MODEL = None
-ACTIVE_MODEL = None
-
-print("\n\n🎉 Ready for using TTS app 🎉\n\n")
-
-def _get_model_viterbox():
-    """Load model một lần duy nhất, các lần sau tái sử dụng."""
-    global MODEL
-    if MODEL is None:
-        print("=" * 50)
-        print("🚀 Loading Viterbox...")
-        print("=" * 50)
-        MODEL = Viterbox.from_pretrained(DEVICE)
-        print("✅ Model loaded!")
-        print("=" * 50)
-    return MODEL
-
-
-def _get_omni_model():
-    """Load Omni model one time and reuse."""
-    global OMNI_MODEL
-    if OMNI_MODEL is None:
-        print("=" * 50)
-        print("🚀 Loading OmniVoice...")
-        print("=" * 50)
-        OMNI_MODEL = Omni()
-        OMNI_MODEL.load()
-        print("✅ OmniVoice loaded!")
-        print("=" * 50)
-    return OMNI_MODEL
-
-
-def _release_viterbox_model():
-    global MODEL
-    if MODEL is not None:
-        MODEL = None
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-
-def _release_omni_model():
-    global OMNI_MODEL
-    if OMNI_MODEL is not None:
-        OMNI_MODEL = None
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-
-def _ensure_active_model(model_choice: str) -> bool:
-    """Keep only the selected model in RAM."""
-    global ACTIVE_MODEL
-    if model_choice == ACTIVE_MODEL:
-        print(f"\n👉 🔒[ModelRouter] Keep current model: {model_choice}")
-        return False
-
-    if model_choice == "omni":
-        print("\n👉 🔄[ModelRouter] Switching: viterbox -> omni")
-        _release_viterbox_model()
-    else:
-        print("\n👉 🔄[ModelRouter] Switching: omni -> viterbox")
-        _release_omni_model()
-
-    ACTIVE_MODEL = model_choice
-    print(f"\n👉 🚀[ModelRouter] Active model: {ACTIVE_MODEL}")
-    return True
+configure_device(DEVICE)
 
 # ── Wrapper functions (inject MODEL + dirs into app_support functions) ─────────
 
-def _generate_speech(model_choice, text, language, reference_audio, tts_mode,
-                     emotional_profile, exaggeration, model_emotion_profile,
-                     ai_speed, ui_pitch_shift, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty):
-    try:
-        switched = _ensure_active_model(model_choice)
-    except Exception as e:
-        return None, f"❌ Model switch error: {str(e)}"
-
-    if model_choice == "omni":
-        # inference với model omni
-        try:
-            omni_model = _get_omni_model()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return None, f"❌ Omni load error: {str(e)}"
-
-        audio_out, status = generate_speech_omni(
-            omni=omni_model,
-            text=text,
-            language=language,
-            reference_audio=reference_audio,
-            speed=ai_speed,
-        )
-        if switched and status:
-            status = f"🔁 Switched to Omni | {status}"
-        return audio_out, status
-    else:
-        # inference với model viterbox
-        try:
-            model = _get_model_viterbox()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return None, f"❌ Viterbox load error: {str(e)}"
-        audio_out, status = generate_speech_viterbox(
-            model, text, language, reference_audio, tts_mode,
-            emotional_profile, exaggeration, model_emotion_profile,
-            ai_speed, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty, ui_pitch_shift,
-        )
-        if switched and status:
-            status = f"🔁 Switched to Viterbox | {status}"
-        return audio_out, status
-
 def _run_build_voice_profile(exaggeration_val):
-    model = _get_model_viterbox()
+    model = get_model_viterbox()
     return run_build_voice_profile(model, PRETRAINED_DIR, OUTPUT_DIR, build_voice_profile, exaggeration_val)
 
 def _run_copy_profile_to_model():
@@ -190,63 +87,7 @@ with gr.Blocks(
     title="🎙️ Viterbox TTS",
     theme=gr.themes.Soft(primary_hue="indigo", secondary_hue="slate", neutral_hue="slate"),
     css=CSS,
-    js="""
-    function() {
-        const disableSpellcheck = (root = document) => {
-            // Set global lang to Vietnamese
-            document.documentElement.setAttribute('lang', 'vi');
-            
-            const process = (el) => {
-                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                    el.setAttribute('spellcheck', 'false');
-                    el.setAttribute('autocomplete', 'off');
-                    el.setAttribute('autocorrect', 'off');
-                    el.setAttribute('autocapitalize', 'off');
-                    el.setAttribute('lang', 'vi');
-                    el.spellcheck = false;
-                    
-                    // Re-apply on focus just in case browser overrides it
-                    if (!el.dataset.spellcheckFixed) {
-                        el.addEventListener('focus', () => {
-                            el.setAttribute('spellcheck', 'false');
-                            el.spellcheck = false;
-                        });
-                        el.dataset.spellcheckFixed = 'true';
-                    }
-                }
-                
-                // Traverse shadow roots (important for newer Gradio/Web Components)
-                if (el.shadowRoot) {
-                    el.shadowRoot.querySelectorAll('textarea, input').forEach(process);
-                }
-            };
-
-            root.querySelectorAll('textarea, input').forEach(process);
-            
-            // Also check special Gradio components that might have shadow roots
-            root.querySelectorAll('*').forEach(el => {
-                if (el.shadowRoot) {
-                    process(el);
-                }
-            });
-        };
-        
-        // Initial setup with multiple delays to catch late-rendering components
-        [100, 500, 1000, 2000, 5000].forEach(delay => {
-            setTimeout(() => disableSpellcheck(), delay);
-        });
-        
-        // Robust observer for dynamic Gradio updates
-        const observer = new MutationObserver((mutations) => {
-            disableSpellcheck();
-        });
-        
-        observer.observe(document.body, { 
-            childList: true, 
-            subtree: true 
-        });
-    }
-    """
+    js=APP_INIT_JS
 ) as demo:
 
     gr.HTML("""
@@ -279,34 +120,13 @@ with gr.Blocks(
             with gr.Row():
                 clear_btn = gr.Button("🗑️ Clear", variant="secondary", size="sm")
 
-            # ── Voice Profile Builder ─────────────────────────────────────
-            with gr.Accordion("🧠 Voice Profile Builder", open=False):
-                with gr.Column(elem_classes=["card"]):
-                    gr.HTML(
-                        '<div style="font-size:0.9rem; color:#ffffff; margin-bottom:0.5rem;">'
-                        'Gộp audio trong viterbox/pretrained/ → tạo conditioning tối ưu → lưu vào viterbox/output-profile/. '
-                        'Nhấn Copy để dùng ngay làm default (cần restart app).'
-                        '</div>'
-                    )
-                    with gr.Row():
-                        build_profile_btn = gr.Button(
-                            "🧠 Build Voice Profile",
-                            variant="primary",
-                            size="sm",
-                            scale=3,
-                        )
-                        copy_profile_btn = gr.Button(
-                            "📋 Copy → modelViterboxLocal",
-                            variant="secondary",
-                            size="sm",
-                            scale=2,
-                        )
-                    build_profile_output = gr.Textbox(
-                        label="Build Log",
-                        lines=6,
-                        interactive=False,
-                        placeholder="Nhấn 'Build Voice Profile' để bắt đầu...",
-                    )
+            # ── Voice Profile Builder for viterbox tts ─────────────────────────────────────
+            with gr.Column(visible=False) as viterbox_profile_container:
+                (
+                    build_profile_btn,
+                    copy_profile_btn,
+                    build_profile_output,
+                ) = viterbox_UI_build_voice_profile()
 
             # nhập thứ tự audio để save
             with gr.Row():
@@ -351,13 +171,6 @@ with gr.Blocks(
             with gr.Accordion("⚙️ Settings", open=False):
                 with gr.Column(elem_classes=["card"]):
 
-                    tts_mode = gr.Radio(
-                        choices=[("TTS normal", "normal"), ("TTS advance", "advance")],
-                        value="normal",
-                        label="TTS Mode",
-                        info="Normal: theo câu | Advance: theo từng từ",
-                    )
-
                     # Emotional Audio Selection
                     with gr.Row():
                         emotional_choices = [
@@ -394,64 +207,28 @@ with gr.Blocks(
                             info="Tốc độ giọng nói từ model AI. 1.0=bình thường, >1=nhanh, <1=chậm. Giữ nguyên pitch.",
                         )
 
-                    with gr.Row():
-                        model_emotion = gr.Dropdown(
-                            choices=get_model_emotion_choices(),
-                            value="AI-precision",
-                            label="🧠 Model AI Emotion Profile - for AI input",
-                            info="Profile cảm xúc từ tham số model AI (override exaggeration + cfg + temp + top_p khi chọn)",
-                        )
+                    # ── Advanced AI Parameters for viterbox tts ─────────────────────────────────────
+                    with gr.Column(visible=False) as viterbox_adv_config_container:
+                        (
+                            model_emotion,
+                            tts_mode,
+                            exaggeration,
+                            ui_cfg_weight,
+                            ui_temperature,
+                            ui_top_p,
+                            ui_repetition_penalty,
+                        ) = viterbox_UI_advance_AI_config()
 
-                    # ── Advanced AI Parameters ─────────────────────────────────
-                    with gr.Accordion("🧪 Advanced AI Parameters - for AI input", open=False):
-                        gr.HTML(
-                            '<div style="font-size:0.82rem; color:#94a3b8; margin-bottom:0.5rem;">'
-                            'Tham số điều khiển trực tiếp model AI. Khi chọn Model Emotion Profile khác Default, '
-                            'các slider CFG/Temp/Top-P sẽ bị override bởi profile đó.'
-                            '</div>'
-                        )
+    # Toggle Viterbox UI based on model selection
+    def toggle_viterbox_ui(choice):
+        is_viterbox = (choice == "viterbox")
+        return gr.update(visible=is_viterbox), gr.update(visible=is_viterbox)
 
-                        exaggeration = gr.Slider(0, 2, 2, step=0.1, label="exaggeration - emotion - for AI input",
-                                                info="cảm xúc. 0: âm đuôi cảm xúc mạnh, 2: âm đuôi mượt hơn",
-                                                interactive=True)
-
-                        with gr.Row():
-                            ui_cfg_weight = gr.Slider(
-                                minimum=0.0,
-                                maximum=2.0,
-                                step=0.1,
-                                value=2.0,
-                                label="📏 CFG Weight",
-                                info="Cao=đọc đúng từ, Thấp=tự do+chậm hơn",
-                            )
-                            ui_temperature = gr.Slider(
-                                minimum=0.01,
-                                maximum=1.0,
-                                step=0.01,
-                                value=0.1,
-                                label="🌡️ Temperature",
-                                info="Cao=prosody đa dạng, Thấp=ổn định",
-                            )
-
-                        with gr.Row():
-                            ui_top_p = gr.Slider(
-                                minimum=0.01,
-                                maximum=1.0,
-                                step=0.01,
-                                value=0.1,
-                                label="🎯 Top-P",
-                                info="Cao=token đa dạng, Thấp=an toàn",
-                            )
-
-                            # phạt lặp từ (repetition_penalty). thấp là tuân thủ chính xác, cao thì có thể bỏ từ lặp
-                            ui_repetition_penalty = gr.Slider(
-                                minimum=1.0,
-                                maximum=2.0,
-                                step=0.05,
-                                value=1.0,
-                                label="🔁 Repetition Penalty",
-                                info=">1.0 tránh lặp token, quá cao sẽ cứng",
-                            )
+    model_choice.change(
+        fn=toggle_viterbox_ui,
+        inputs=[model_choice],
+        outputs=[viterbox_profile_container, viterbox_adv_config_container]
+    )
 
     # Save download folder
     with gr.Row():
@@ -483,45 +260,105 @@ with gr.Blocks(
     # Khi bấm X ở audio, reset dropdown để lần chọn lại cùng file vẫn trigger update.
     ref_audio.clear(fn=lambda: None, outputs=[ref_dropdown])
 
-    # Disable slider exaggeration khi chọn profile cụ thể (profile đã tự set exaggeration)
-    # Enable lại khi chọn Custom (để user tự điều chỉnh)
-    model_emotion.change(
-        fn=_update_model_emotion_controls,
-        inputs=[model_emotion],
-        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
+    def generate_speech_fn(data):
+        mc = data[model_choice]
+        try:
+            switched = ensure_active_model(mc)
+        except Exception as e:
+            return None, f"❌ Model switch error: {str(e)}"
+
+        if mc == "omni":
+            # inference với model omni - chỉ dùng các tham số cần thiết cho Omni
+            try:
+                omni_model = get_omni_model()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return None, f"❌ Omni load error: {str(e)}"
+
+            audio_out, status = generate_speech_omni(
+                omni=omni_model,
+                text=data[text_input],
+                language=data[language],
+                reference_audio=data[ref_audio],
+                speed=data[ai_speed],
+            )
+            if switched and status:
+                status = f"🔁 Switched to Omni | {status}"
+            return audio_out, status
+        else:
+            # inference với model viterbox - dùng các tham số chi tiết cho Viterbox
+            try:
+                model = get_model_viterbox()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return None, f"❌ Viterbox load error: {str(e)}"
+
+            audio_out, status = generate_speech_viterbox(
+                MODEL=model, 
+                text=data[text_input], 
+                language=data[language], 
+                reference_audio=data[ref_audio], 
+                tts_mode=data[tts_mode],
+                emotional_profile=data[emotional_profile], 
+                ui_exaggeration=data[exaggeration], 
+                model_emotion_profile=data[model_emotion],
+                ai_speed=data[ai_speed], 
+                ui_cfg_weight=data[ui_cfg_weight], 
+                ui_temperature=data[ui_temperature], 
+                ui_top_p=data[ui_top_p], 
+                ui_repetition_penalty=data[ui_repetition_penalty], 
+                ui_pitch_shift=data[ui_pitch_shift],
+            )
+            if switched and status:
+                status = f"🔁 Switched to Viterbox | {status}"
+            return audio_out, status
+
+    viterbox_bind_advanced_ai_config_actions(
+        demo=demo,
+        model_emotion=model_emotion,
+        exaggeration=exaggeration,
+        ui_cfg_weight=ui_cfg_weight,
+        ui_temperature=ui_temperature,
+        ui_top_p=ui_top_p,
+        ui_repetition_penalty=ui_repetition_penalty,
+        update_model_emotion_controls_fn=_update_model_emotion_controls,
     )
 
+    # Define separate input sets for each model for better maintainability
+    inputs_omni = {
+        model_choice, text_input, language, ref_audio, ai_speed
+    }
+    inputs_viterbox = {
+        model_choice, text_input, language, ref_audio, tts_mode,
+        emotional_profile, exaggeration, model_emotion,
+        ai_speed, ui_pitch_shift, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty
+    }
+
     generate_btn.click(
-        fn=_generate_speech,
-        inputs=[model_choice, text_input, language, ref_audio, tts_mode,
-                emotional_profile, exaggeration, model_emotion,
-                ai_speed, ui_pitch_shift, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
+        fn=generate_speech_fn,
+        inputs=inputs_omni | inputs_viterbox,  # Union of all necessary components
         outputs=[output_audio, status_text]
     )
 
     # Thiết lập sự kiện khi bấm nút Save
     save_btn.click(fn=save_path, inputs=folder_input, outputs=status_text)
 
-    # Voice Profile Builder — truyền giá trị exaggeration hiện tại sang builder
-    build_profile_btn.click(
-        fn=_run_build_voice_profile,
-        inputs=[exaggeration],
-        outputs=[build_profile_output],
+    # Voice Profile Builder
+    viterbox_bind_voice_profile_actions(
+        build_profile_btn=build_profile_btn,
+        copy_profile_btn=copy_profile_btn,
+        build_profile_output=build_profile_output,
+        exaggeration=exaggeration,
+        run_build_voice_profile_fn=_run_build_voice_profile,
+        run_copy_profile_to_model_fn=_run_copy_profile_to_model,
     )
-    copy_profile_btn.click(
-        fn=_run_copy_profile_to_model,
-        inputs=[],
-        outputs=[build_profile_output],
-    )
+
     save_audio_btn.click(
         fn=save_generated_audio,
         inputs=[output_audio, text_input, folder_input, numeric_input],
         outputs=[status_text, saved_file, numeric_input],
-    )
-    demo.load(
-        fn=_update_model_emotion_controls,
-        inputs=[model_emotion],
-        outputs=[exaggeration, ui_cfg_weight, ui_temperature, ui_top_p, ui_repetition_penalty],
     )
     demo.load(fn=lambda: 1, outputs=[numeric_input])
 
