@@ -27,6 +27,7 @@ from general.general_tool_audio import (
     fix_silent_and_speed_audio,
     clearText,
     create_srt_file,
+    addConfigText,
 )
 
 def _import_omnivoice_class():
@@ -184,6 +185,8 @@ def generate_speech_omni(
 
             spoken = seg["content"]
             print(f"\n  🔊 Omni Generating: {spoken}")
+
+            spoken = addConfigText(spoken)
 
             audios = omni._inferWithModelOmni(
                 text=spoken.strip(),
