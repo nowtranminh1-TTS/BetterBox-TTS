@@ -22,18 +22,17 @@ from .models.voice_encoder import VoiceEncoder
 from .models.tokenizers import MTLTokenizer
 from general.EQ_emotion_config.eq_emotional_profiles import get_emotional_audio_profile, get_profile_description
 
-from .tts_helper.tts_support import (
+from general.general_tool_audio import (
     SEGMENT_TEXT,
     get_reference_sound,
     segment_text,
-    punc_norm,
     normalize_text,
     fix_silent_and_speed_audio,
     clearText,
 )
 from .tts_helper.tts_TTSConds import TTSConds
 from .tts_helper.tts_numberToken import getNumberTokenText
-from .tts_helper.tts_extension import ViterboxExtensionMixin
+from .tts_helper.tts_extension import ViterboxExtensionMixin, punc_norm
 
 
 class Viterbox(ViterboxExtensionMixin):

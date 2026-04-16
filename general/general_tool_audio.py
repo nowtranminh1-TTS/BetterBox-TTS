@@ -1,14 +1,10 @@
-# viterbox/tts_helper/tts_support.py
+# general/general_tool_audio.py
 from pathlib import Path  # ← ĐÚNG
 import re
 
 import numpy as np
 from typing import List, Optional
 import librosa
-
-# Import hàm precision mới từ file riêng — bản nâng cấp toàn diện
-# dựa trên phân tích thực tế tokenizer JSON (BPE, NFC, vocab filtering)
-from .tts_precision import config_token_for_precision
 
 # ── Pause config ──────────────────────────────────────────
 # Pause durations (ms) per punctuation class
@@ -96,34 +92,6 @@ def segment_text(text: str) -> List[dict]:
 
     return merged
 
-def punc_norm(text: str, use_precision_config: bool = True) -> str:
-    """
-    Tiền xử lý text trước khi đưa vào tokenizer.
-
-    Tham số:
-        use_precision_config:
-            True  (mặc định) = dùng config_token_for_precision từ tts_precision.py
-                                (NFC normalize, lọc UNK, tách từ dài, boundary pause)
-                                Bản nâng cấp toàn diện — ưu tiên dùng.
-            False             = dùng addConfigText cũ (chỉ thêm " . text . ")
-    """
-    if len(text) == 0:
-        return "Bạn cần nhập nội dung để tôi đọc."
-
-    original = text
-
-    text = clearText(text)
-
-    if use_precision_config:
-        # ── Dùng hàm từ tts_precision.py — bao gồm NFC, vocab filter, boundary pause ──
-        text = config_token_for_precision(text)
-    else:
-        # ── Giữ lại cách cũ để tương thích nếu cần ──
-        text = addConfigText(text)
-
-    #print(f"  [punc_norm] '{original}' → '{text}'\n")
-    return text
-
 def clearText(text: str) -> str:
 
  # Chuyển toàn bộ về chữ thường
@@ -132,7 +100,7 @@ def clearText(text: str) -> str:
     original = text
 
     # Chuẩn hóa mọi dấu câu → ", "
-    text = re.sub(r'[!@#$%^&*()_+\-=\[\]{};\'\":\\|,.<>/?`~\.…]+', ', ', text)
+    text = re.sub(r'[!@#$%^&*()_+\-=\[\]{};\'":\\|,.<>/?`~\.…]+', ', ', text)
 
     # Dọn khoảng trắng thừa, giữ nguyên từ
     text = " ".join(text.split())
@@ -198,7 +166,7 @@ def normalize_text(text: str, language: str = "vi") -> str:
 
 def fix_silent_and_speed_audio(
     audio: np.ndarray,
-    sr: int,
+    sr: int, # input framerate
     threshold_ms: int = 50,
     silence_threshold_db: float = -60.0  # ngưỡng dB để xác định silent. càng cao càng là có tiếng nói. VD: -18 dB chắc chắn là người nói
 ) -> np.ndarray:

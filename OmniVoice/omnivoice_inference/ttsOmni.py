@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional, cast
 import sys
+import gc
 
 import numpy as np
 import torch
@@ -15,6 +16,15 @@ except ImportError:
     from OmniVoice.omnivoice_inference.omnivoice_support.ttsOmni_Config import (
         inferWithModelOmni,
     )
+
+from general.general_tool_audio import (
+    SEGMENT_TEXT,
+    get_reference_sound,
+    segment_text,
+    normalize_text,
+    fix_silent_and_speed_audio,
+    clearText,
+)
 
 def _import_omnivoice_class():
     try:
@@ -126,29 +136,110 @@ def generate_speech_omni(
     if not reference_audio:
         return None, "❌ No reference audio! Add .wav files to wavs/ folder"
 
+    # ── Preprocess text ────────────────────────────────────────────────────
+    text = clearText(text)
+    text = normalize_text(text, language)
+
+    # Segment — tách câu theo dấu câu
+    segments = segment_text(text)
+    if not segments:
+        segments = [{"type": SEGMENT_TEXT, "content": text}]
+
+    # Log segments
+    text_segs = [s for s in segments if s["type"] == SEGMENT_TEXT]
+    print(f"📝 Text segmented into {len(segments)} items ({len(text_segs)} spoken chunks):")
+
+    for idx, seg in enumerate(segments):
+        if seg["type"] == SEGMENT_TEXT:
+            print(f"   [{idx+1}] 🗣  [{seg['content']}]")
+        else:
+            print(f"   [{idx+1}] ⏸  '{seg['content']}' → {seg['pause_ms']} ms")
+
+    # ── Build audio ────────────────────────────────────────────────────────
+    audio_pieces: List[np.ndarray] = []
+    join_before:  List[str]        = []
+    pending_join: str              = "sentence"
+
+# ----------------------------READY FOR INFERENCE TTS--------------------------
     print(f"\n🚩bắt đầu inference audio với model OmniVoice: speed={speed}", flush=True)
-    try:
-        # Debug: Show speed effect on estimated duration
-        if speed != 1.0:
-            print(f"   📊 Speed {speed} sẽ tạo audio {'ngắn hơn' if speed > 1 else 'dài hơn'} ~{abs(speed-1)*100:.0f}% so với speed=1.0", flush=True)
-        audios = omni._inferWithModelOmni(
-            text=text.strip(),
-            reference_audio=reference_audio,
-            language=language,
-            speed=speed,
-        )
-        audio_np = np.asarray(audios[0])
-        if audio_np.size == 0:
-            print("⚠️ Omni trả về audio rỗng, đang có vấn đề gì đó, hãy check code\n", flush=True)
-            return None, "❌ Omni returned empty audio after retry. Try another reference_audio or shorter text."
-        duration = len(audio_np) / omni.sampling_rate
-        status = f"✅ Generated (Omni)! | {duration:.2f}s | {language.upper()}"
 
-        print(f"✅ done, đã inference xong với OmniVoice | duration={duration:.2f}s\n", flush=True)
+    # Debug: Show speed effect on estimated duration
+    if speed != 1.0:
+        print(f"   📊 Speed {speed} sẽ tạo audio {'ngắn hơn' if speed > 1 else 'dài hơn'} ~{abs(speed-1)*100:.0f}% so với speed=1.0", flush=True)
+    
+    for seg in segments:
+        if seg["type"] == SEGMENT_TEXT:
 
-        return (omni.sampling_rate, audio_np), status
-    except Exception as e:
-        import traceback
+            spoken = seg["content"]
+            print(f"\n  🔊 Omni Generating: {spoken}")
 
-        traceback.print_exc()
-        return None, f"❌ Omni error: {str(e)}"
+            audios = omni._inferWithModelOmni(
+                text=spoken.strip(),
+                reference_audio=reference_audio,
+                language=language,
+                speed=speed,
+            )
+
+            # audios là list, lấy phần tử đầu tiên
+            getFirstAudio = audios[0]
+            audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
+                                                  threshold_ms=50,
+                                                  silence_threshold_db=-60)
+            if len(audio_np) > 0:
+                join_before.append(pending_join)
+                audio_pieces.append(audio_np)
+                pending_join = "sentence"
+
+            # ---------------------đảm bảo CUDA ops xong hết-------------------------
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()   # đảm bảo CUDA ops xong hết
+            gc.collect()
+        else:
+            pending_join = f"pause:{seg['pause_ms']}"
+
+ # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
+    if not audio_pieces:
+        return torch.zeros(1, omni.sampling_rate)
+
+    print(f"\n🔢 🧩 count audio_pieces: {len(audio_pieces)}, count join_before: {len(join_before)}")
+    for idx, piece in enumerate(audio_pieces):
+        print(f"   audio_pieces[{idx}]: shape={piece.shape}, dtype={piece.dtype}")
+    print(f"   join_before: {join_before}")
+
+    #-------- nối các chuỗi âm thanh rời rạc
+    result = audio_pieces[0].astype(np.float32)
+    for i in range(1, len(audio_pieces)):
+        rule = join_before[i]
+        # Nếu không có pause explicit thì nối liền tự nhiên, không ép silence
+        if isinstance(rule, str) and rule.startswith("pause:"):
+            ms = int(rule.split(":")[1])   # có dấu câu, cần add khoảng lặng
+        else:
+            ms = 0                          # không có dấu câu, không cần add khoảng lặng
+        silence = np.zeros(int(omni.sampling_rate * ms / 1000), dtype=np.float32)
+        piece = audio_pieces[i].astype(np.float32)
+        result  = np.concatenate([result, silence, piece])
+        print(f"🔗Concatenated piece {i}: result len={len(result)}")
+
+    # khoảng lặng dài hơn 200ms, là dài hơn dấu phẩy, thì rút ngắn lại
+    result = fix_silent_and_speed_audio(result, omni.sampling_rate, threshold_ms=200, silence_threshold_db=-60)
+
+    # BẮT BUỘC CUỐI CÂU PHẢI CÓ KHOẢNG LẶNG NGẮN
+    trailing_silence_ms: int  = 250  # thêm silence đuôi để tránh hai câu sát quá, đọc như đọc rap
+
+    trailing_samples = int(trailing_silence_ms / 1000.0 * omni.sampling_rate)
+    if trailing_samples > 0:
+        if result.ndim == 1:
+            silence = np.zeros(trailing_samples, dtype=result.dtype)
+        else:
+            # shape: (samples, channels) hoặc (channels, samples)
+            silence = np.zeros((trailing_samples, result.shape[1]), dtype=result.dtype)
+        result = np.concatenate([result, silence], axis=0)
+
+    duration = len(result) / omni.sampling_rate
+    status = f"✅ Generated (Omni)! | {duration:.2f}s | {language.upper()}"
+
+    print(f"\n✅ done, đã inference xong với OmniVoice | duration={duration:.2f}s\n", flush=True)
+    print(f"===========================================================================================================")
+    print(f"===========================================================================================================\n\n\n")
+
+    return (omni.sampling_rate, result), status

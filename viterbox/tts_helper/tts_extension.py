@@ -29,6 +29,8 @@ from general.EQ_emotion_config.eq_emotional_profiles import (
     get_profile_description,
 )
 from .tts_TTSConds import TTSConds
+from .tts_precision import config_token_for_precision
+from general.general_tool_audio import clearText, addConfigText
 
 
 class ViterboxExtensionMixin:
@@ -263,3 +265,31 @@ class ViterboxExtensionMixin:
             audio_np, _ = librosa.effects.trim(audio_np, top_db=30)
 
         sf.write(str(path), audio_np, self.sr)
+
+
+# ── Text preprocessing utilities ──────────────────────────────────────────
+
+def punc_norm(text: str, use_precision_config: bool = True) -> str:
+    """
+    Tiền xử lý text trước khi đưa vào tokenizer.
+
+    Tham số:
+        use_precision_config:
+            True  (mặc định) = dùng config_token_for_precision từ tts_precision.py
+                                (NFC normalize, lọc UNK, tách từ dài, boundary pause)
+                                Bản nâng cấp toàn diện — ưu tiên dùng.
+            False             = dùng addConfigText cũ (chỉ thêm " . text . ")
+    """
+    if len(text) == 0:
+        return "Bạn cần nhập nội dung để tôi đọc."
+
+    text = clearText(text)
+
+    if use_precision_config:
+        # ── Dùng hàm từ tts_precision.py — bao gồm NFC, vocab filter, boundary pause ──
+        text = config_token_for_precision(text)
+    else:
+        # ── Giữ lại cách cũ để tương thích nếu cần ──
+        text = addConfigText(text)
+
+    return text
