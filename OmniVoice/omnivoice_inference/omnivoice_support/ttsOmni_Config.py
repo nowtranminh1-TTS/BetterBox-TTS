@@ -27,7 +27,7 @@ def inferWithModelOmni(
 
     # guidance_scale: độ bám text/ref.
     # Tăng quá cao: có thể bị "gắt", méo tự nhiên; giảm quá thấp: dễ lệch nội dung. Muốn chính xác: dùng mức trung-cao.
-    guidance_scale: Optional[float] = 3.0  # tối thiểu: 0.0, tối đa: 5.0 | khuyến nghị chính xác: 2.5-3.5
+    guidance_scale: Optional[float] = 5.0  # tối thiểu: 0.0, tối đa: 5.0 | khuyến nghị chính xác: 2.5-3.5
 
     # t_shift: tham số lịch decode.
     # Cho mục tiêu chính xác, giữ gần mặc định để ổn định; tăng/giảm mạnh thường không giúp rõ rệt.
@@ -35,7 +35,7 @@ def inferWithModelOmni(
 
     # layer_penalty_factor: phạt layer sâu để giữ ổn định.
     # Tăng quá cao: có thể mất chi tiết/độ tự nhiên; giảm quá thấp: dễ dao động. Muốn chính xác: mức trung bình.
-    layer_penalty_factor: Optional[float] = 5.0  # tối thiểu: 0.0, tối đa: 10.0 | khuyến nghị chính xác: 4.0-6.0
+    layer_penalty_factor: Optional[float] = 10.0  # tối thiểu: 0.0, tối đa: 10.0 | khuyến nghị chính xác: 4.0-6.0
 
     # position_temperature: THAM SỐ QUAN TRỌNG NHẤT cho tính nhất quán.
     # Tăng: ngẫu nhiên hơn, kết quả mỗi lần khác nhau - Giảm về 0: deterministic, chính xác/lặp lại tốt nhất.
@@ -55,7 +55,7 @@ def inferWithModelOmni(
     postprocess_output: Optional[bool] = False  # tối thiểu: False, tối đa: True
 
     # audio_chunk_duration: mỗi chunk dài hơn thì ít điểm nối hơn (thường chính xác ngữ điệu tốt hơn) nhưng tốn VRAM hơn.
-    audio_chunk_duration: Optional[float] = 24.0  # tối thiểu: 5.0, tối đa: 30.0 | khuyến nghị chính xác: 18-24
+    audio_chunk_duration: Optional[float] = 30.0  # tối thiểu: 5.0, tối đa: 30.0 | khuyến nghị chính xác: 18-24
 
     # audio_chunk_threshold: tăng cao để HẠN CHẾ chunking (ít đứt mạch, thường chính xác hơn cho câu vừa/ngắn).
     audio_chunk_threshold: Optional[float] = 60.0  # tối thiểu: 10.0, tối đa: 60.0 | khuyến nghị chính xác: 45-60
