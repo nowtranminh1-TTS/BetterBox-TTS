@@ -5,6 +5,7 @@
 ## một số tính năng mới - chung: 
 - 1. bổ sung tùy chọn model Omnivoice hoặc Viterbox ngoài UI. click chọn là chạy.
 - 2. fix bug UI
+- 3. thêm tính năng #TẠO SRT FILE# - khi generate audio thì file SRT cũng sẽ tự generate luôn 
 - Note: hiện model Omnivoice còn thô sơ, chưa có chức năng ngắt câu theo dấu câu.  
 
 ## một số tính năng mới - cho model Viterbox
