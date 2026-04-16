@@ -12,6 +12,23 @@ import tempfile, os
 os.environ["GRADIO_TEMP_DIR"] = tempfile.gettempdir() + "/my_gradio_tmp"
 os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
 
+# Clear temp folder on startup (không crash nếu lỗi)
+try:
+    import shutil
+    temp_dir = os.environ["GRADIO_TEMP_DIR"]
+    if os.path.exists(temp_dir):
+        for item in os.listdir(temp_dir):
+            item_path = os.path.join(temp_dir, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            except Exception:
+                pass  # Bỏ qua file đang bị lock
+except Exception:
+    pass  # Không crash app nếu có lỗi
+
 from pathlib import Path
 from typing import cast
 from gradio.components.textbox import InputHTMLAttributes
@@ -130,14 +147,6 @@ with gr.Blocks(
 
             # nhập thứ tự audio để save
             with gr.Row():
-                numeric_input = gr.Number(
-                    label="Thứ tự:",
-                    value=1,
-                    minimum=1,
-                    step=1,
-                    precision=0,
-                    interactive=True,
-                )
                 model_choice = gr.Radio(
                     choices=[("Viterbox", "viterbox"), ("Omni", "omni")],
                     value="omni",
@@ -243,7 +252,7 @@ with gr.Blocks(
 
 
     # Generate button
-    generate_btn = gr.Button("🔊 Generate Speech", variant="primary", size="lg", elem_classes=["generate-btn"])
+    generate_btn = gr.Button("🔊 Generate Speech + SRT audio", variant="primary", size="lg", elem_classes=["generate-btn"])
 
     # Output
     with gr.Column(elem_classes=["output-card"]):
@@ -252,8 +261,11 @@ with gr.Blocks(
             output_audio = gr.Audio(label="Generated Speech", type="numpy", scale=2, interactive=False)
             status_text = gr.Textbox(label="Status", lines=2, scale=1)
     with gr.Row():
-        save_audio_btn = gr.Button("💾 Lưu audio về máy", variant="secondary")
-        saved_file = gr.File(label="File đã lưu", interactive=False)
+        save_audio_btn = gr.Button("💾 Lưu audio + SRT về máy", variant="secondary")
+
+        with gr.Column(scale=1, elem_classes=["card"]):
+            saved_file = gr.File(label="File đã lưu", interactive=False)
+            srt_file = gr.File(label="SRT File", interactive=False, visible=True)
 
     clear_btn.click(fn=lambda: "", outputs=[text_input])
     ref_dropdown.change(fn=lambda x: gr.update(value=x), inputs=[ref_dropdown], outputs=[ref_audio])
@@ -276,7 +288,7 @@ with gr.Blocks(
                 traceback.print_exc()
                 return None, f"❌ Omni load error: {str(e)}"
 
-            audio_out, status = generate_speech_omni(
+            audio_out, status, srtFileResult = generate_speech_omni(
                 omni=omni_model,
                 text=data[text_input],
                 language=data[language],
@@ -285,7 +297,7 @@ with gr.Blocks(
             )
             if switched and status:
                 status = f"🔁 Switched to Omni | {status}"
-            return audio_out, status
+            return audio_out, status, srtFileResult
         else:
             # inference với model viterbox - dùng các tham số chi tiết cho Viterbox
             try:
@@ -295,7 +307,7 @@ with gr.Blocks(
                 traceback.print_exc()
                 return None, f"❌ Viterbox load error: {str(e)}"
 
-            audio_out, status = generate_speech_viterbox(
+            audio_out, status, srtFileResult = generate_speech_viterbox(
                 MODEL=model, 
                 text=data[text_input], 
                 language=data[language], 
@@ -313,7 +325,8 @@ with gr.Blocks(
             )
             if switched and status:
                 status = f"🔁 Switched to Viterbox | {status}"
-            return audio_out, status
+
+            return audio_out, status, srtFileResult
 
     viterbox_bind_advanced_ai_config_actions(
         demo=demo,
@@ -339,7 +352,7 @@ with gr.Blocks(
     generate_btn.click(
         fn=generate_speech_fn,
         inputs=inputs_omni | inputs_viterbox,  # Union of all necessary components
-        outputs=[output_audio, status_text]
+        outputs=[output_audio, status_text, srt_file]
     )
 
     # Thiết lập sự kiện khi bấm nút Save
@@ -357,10 +370,9 @@ with gr.Blocks(
 
     save_audio_btn.click(
         fn=save_generated_audio,
-        inputs=[output_audio, text_input, folder_input, numeric_input],
-        outputs=[status_text, saved_file, numeric_input],
+        inputs=[output_audio, text_input, folder_input, srt_file],
+        outputs=[status_text, saved_file],
     )
-    demo.load(fn=lambda: 1, outputs=[numeric_input])
 
 
 if __name__ == "__main__":

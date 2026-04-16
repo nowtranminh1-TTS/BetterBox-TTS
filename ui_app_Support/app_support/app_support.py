@@ -160,17 +160,11 @@ def _slugify_filename_from_text(text: str, max_words: int = 5) -> str:
     return "_".join(words)
 
 
-def save_generated_audio(audio_data, text: str, folder_path: str, sequence_number):
-    """Lưu audio đã sinh vào thư mục chỉ định trong UI."""
-    try:
-        current_number = int(sequence_number) if sequence_number is not None else 1
-    except (TypeError, ValueError):
-        current_number = 1
-    if current_number < 1:
-        current_number = 1
+def save_generated_audio(audio_data, text: str, folder_path: str, srt_path: str = None):
+    """Lưu audio đã sinh vào thư mục chỉ định trong UI, và copy SRT nếu có."""
 
     if audio_data is None:
-        return "❌ Chưa có audio để lưu", None, current_number
+        return "❌ Chưa có audio và SRT để lưu", None
 
     sr, audio_np = audio_data
     out_dir = _safe_output_dir(folder_path)
@@ -178,7 +172,7 @@ def save_generated_audio(audio_data, text: str, folder_path: str, sequence_numbe
 
     base_name = _slugify_filename_from_text(text, max_words=5)
     rand_id = random.randint(100, 999)
-    prefixed_name = f"{current_number}_{base_name}_{rand_id}.wav"
+    prefixed_name = f"{base_name}_{rand_id}.wav"
     out_path = out_dir / prefixed_name
     bd = _pyinstaller_bundle_dir()
     fallback_dir = (bd / "downloads") if bd is not None else Path("downloads")
@@ -194,15 +188,31 @@ def save_generated_audio(audio_data, text: str, folder_path: str, sequence_numbe
         try:
             sf.write(str(final_path), audio_np, sr)
         except Exception as e:
-            return f"❌ Không thể lưu audio: {str(e)}", None, current_number
+            return f"❌ Không thể lưu audio: {str(e)}", None
+
+    # Copy SRT file nếu có và folder_path được chỉ định
+    srt_final_path = None
+    if srt_path and Path(srt_path).exists() and folder_path and folder_path.strip():
+        try:
+            srt_name = f"{base_name}_{rand_id}.srt"
+            srt_dest = out_dir / srt_name
+            shutil.copyfile(str(srt_path), str(srt_dest))
+            srt_final_path = str(srt_dest)
+        except Exception as e:
+            print(f"⚠️ Không thể copy SRT: {e}")
 
     # Trả file trong thư mục temp của app để Gradio không báo InvalidPathError.
     temp_export = Path(os.environ["GRADIO_TEMP_DIR"]) / final_path.name
     try:
         shutil.copyfile(str(final_path), str(temp_export))
     except Exception as e:
-        return f"❌ Lưu file xong nhưng không thể xuất file tải xuống: {str(e)}", None, current_number
-    return f"✅ Đã lưu audio: {final_path}", str(temp_export), current_number + 1
+        return f"❌ Lưu file xong nhưng không thể xuất file tải xuống: {str(e)}", None
+    
+    status_msg = f"✅ Đã lưu audio: {final_path}"
+    if srt_final_path:
+        status_msg += f"\n✅ Đã lưu SRT: {srt_final_path}"
+    
+    return status_msg, str(temp_export)
 
 
 # ── Generate speech ───────────────────────────────────────────────────────────

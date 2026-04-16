@@ -2,7 +2,7 @@
 
 ### app base trên Vitterbox tts: https://github.com/iamdinhthuan/viterbox-tts
 
-## một số tính năng mới - chung (OmniVoice + viterbox): 
+## một số tính năng mới - chung: 
 - 1. bổ sung tùy chọn model Omnivoice hoặc Viterbox ngoài UI. click chọn là chạy.
 - 2. fix bug UI
 - Note: hiện model Omnivoice còn thô sơ, chưa có chức năng ngắt câu theo dấu câu.  

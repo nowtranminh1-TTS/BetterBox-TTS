@@ -125,31 +125,7 @@ def addConfigText(text: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ⚠️ DEPRECATED — Phiên bản cũ, giữ lại để tương thích.
-# Phiên bản mới nằm trong tts_precision.py (import ở đầu file).
-# Bản mới có: NFC normalize, đọc vocab trực tiếp từ tokenizer JSON,
-# lọc invisible chars, phân tích Unicode category, v.v.
-# ─────────────────────────────────────────────────────────────────────────────
-# BẢNG GỐC RỄ: Giải thích tại sao các trick bên dưới lại hoạt động
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# Pipeline của Viterbox (T3 → speech_tokens → S3Gen):
-#
-#   [text] → MTLTokenizer.text_to_tokens()
-#           → T3.inference() → speech_tokens (acoustic discrete tokens)
-#           → S3Gen.inference() → waveform
-#
-#   T3 là LLaMA-based autoregressive model. Nó nhận text tokens và sinh ra
-#   "speech tokens" — một dãy discrete code đại diện cho âm thanh.
-#
-#   T3 học từ dữ liệu thực, nên nó quen với các pattern "tự nhiên":
-#   - Câu đầy đủ, không cụt lủ
-#   - Có khoảng lặng (pause) đầu/cuối
-#   - Phân cách rõ ràng giữa các từ
-#
-#   Vì vậy, thêm ký tự `. ` đầu/cuối (như addConfigText) giúp model "tin"
-#   rằng đây là một câu hoàn chỉnh, không cần sinh thêm âm đuôi dài.
-#
+# trick 4 áp dụng cho các model kiểu cũ: text -> audio token -> audio wave
 # CÁC TRICK ĐƯỢC IMPLEMENT BÊN DƯỚI:
 #   1. Chuẩn hoá khoảng trắng thừa giữa các từ (model nhạy cảm với space)
 #   2. Phân tách từ ghép dài bằng cách thêm khoảng trắng nhẹ (long-word splitting)
@@ -269,3 +245,47 @@ def get_cut_silent_ms(duration_ms: float, threshold_ms: int) -> float:
         return 0.0  # không cắt
     else:
         return (duration_ms - threshold_ms) # đảm bảo sau khi cắt, kết quả còn lại luôn là threshold_ms ms
+
+
+# tool tạo SRT file
+def _format_srt_time(seconds: float) -> str:
+    """Format time as SRT timestamp: HH:MM:SS,mmm"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def create_srt_file(timing_items: List[dict], output_path: str) -> str:
+    """
+    Create SRT subtitle file from timing items.
+    
+    Args:
+        timing_items: List of dict with keys: startTime, endTime, text
+        output_path: Path to save the SRT file
+    
+    Returns:
+        Path to the created SRT file
+    """
+    output_path = Path(output_path)
+    
+    srt_lines = []
+    for idx, item in enumerate(timing_items, start=1):
+        start = _format_srt_time(item["startTime"])
+        end = _format_srt_time(item["endTime"])
+        text = item["text"]
+        
+        srt_lines.append(f"{idx}")
+        srt_lines.append(f"{start} --> {end}")
+        srt_lines.append(f"{text}")
+        srt_lines.append("")  # Empty line between entries
+    
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write SRT file
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(srt_lines))
+    
+    return str(output_path)

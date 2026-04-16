@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any, Optional, cast
 import sys
 import gc
-
+import warnings
+import tempfile, os
 import numpy as np
 import torch
+
 try:
     from .omnivoice_support.ttsOmni_Config import inferWithModelOmni
 except ImportError:
@@ -24,6 +26,7 @@ from general.general_tool_audio import (
     normalize_text,
     fix_silent_and_speed_audio,
     clearText,
+    create_srt_file,
 )
 
 def _import_omnivoice_class():
@@ -120,8 +123,10 @@ class Omni:
 
     @property
     def sampling_rate(self) -> int:
-        model = cast(Any, self.loadModelOmni())
-        return cast(int, model.sampling_rate)
+        if not hasattr(self, '_sampling_rate'): # chưa có trong cache thì load model để lấy sampling_rate
+            model = cast(Any, self.loadModelOmni())
+            self._sampling_rate = cast(int, model.sampling_rate) # đã cache
+        return self._sampling_rate
 
 
 def generate_speech_omni(
@@ -134,7 +139,10 @@ def generate_speech_omni(
     if not (text or "").strip():
         return None, "❌ Please enter some text"
     if not reference_audio:
-        return None, "❌ No reference audio! Add .wav files to wavs/ folder"
+        ref_path = get_reference_sound()
+        if ref_path is None:
+            return None, "❌ No reference audio! Add .wav files to wavs/ folder"
+        reference_audio = str(ref_path)
 
     # ── Preprocess text ────────────────────────────────────────────────────
     text = clearText(text)
@@ -159,6 +167,10 @@ def generate_speech_omni(
     audio_pieces: List[np.ndarray] = []
     join_before:  List[str]        = []
     pending_join: str              = "sentence"
+
+    # ── Create SRT file ─────────────────────────────────────────────────────
+    arrSrt: List[dict]      = []  # để làm file SRT, List chứa {startTime, endTime, text}
+    current_time: float      = 0.0  # Thời gian tích lũy (giây)
 
 # ----------------------------READY FOR INFERENCE TTS--------------------------
     print(f"\n🚩bắt đầu inference audio với model OmniVoice: speed={speed}", flush=True)
@@ -185,6 +197,23 @@ def generate_speech_omni(
             audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
                                                   threshold_ms=50,
                                                   silence_threshold_db=-60)
+
+            # [SRT FILE] Tạo timing item cho segment này
+            segment_duration = len(audio_np) / omni.sampling_rate
+            start_time = current_time
+            end_time = current_time + segment_duration
+            
+            timing_item = {
+                "startTime": start_time,
+                "endTime": end_time,
+                "text": spoken
+            }
+            arrSrt.append(timing_item)
+            
+            # [SRT FILE]Cập nhật current_time cho segment tiếp theo
+            current_time = end_time
+            
+            print(f"   🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
             if len(audio_np) > 0:
                 join_before.append(pending_join)
                 audio_pieces.append(audio_np)
@@ -193,8 +222,13 @@ def generate_speech_omni(
             # ---------------------đảm bảo CUDA ops xong hết-------------------------
             if torch.cuda.is_available():
                 torch.cuda.synchronize()   # đảm bảo CUDA ops xong hết
+                torch.cuda.empty_cache()
             gc.collect()
         else:
+            # [SRT FILE] Cộng thời gian pause của dấu câu vào current_time
+            pause_seconds = seg['pause_ms'] / 1000.0
+            current_time = current_time + pause_seconds
+
             pending_join = f"pause:{seg['pause_ms']}"
 
  # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
@@ -220,8 +254,9 @@ def generate_speech_omni(
         result  = np.concatenate([result, silence, piece])
         print(f"🔗Concatenated piece {i}: result len={len(result)}")
 
-    # khoảng lặng dài hơn 200ms, là dài hơn dấu phẩy, thì rút ngắn lại
-    result = fix_silent_and_speed_audio(result, omni.sampling_rate, threshold_ms=200, silence_threshold_db=-60)
+    # KHÔNG SỬ DỤNG 'fix_silent_and_speed_audio'. 
+    # vì user nhập dấu câu thế nào thì khoảng lặng giữa các câu giữ nguyên như config
+   
 
     # BẮT BUỘC CUỐI CÂU PHẢI CÓ KHOẢNG LẶNG NGẮN
     trailing_silence_ms: int  = 250  # thêm silence đuôi để tránh hai câu sát quá, đọc như đọc rap
@@ -238,8 +273,16 @@ def generate_speech_omni(
     duration = len(result) / omni.sampling_rate
     status = f"✅ Generated (Omni)! | {duration:.2f}s | {language.upper()}"
 
-    print(f"\n✅ done, đã inference xong với OmniVoice | duration={duration:.2f}s\n", flush=True)
+    # [SRT FILE] Tạo file SRT trong temp directory để Gradio có thể trả về
+    
+    gradio_temp = os.environ.get("GRADIO_TEMP_DIR", tempfile.gettempdir())
+    srt_temp_path = os.path.join(gradio_temp, f"omni_srt_{hash(text) % 1000000}.srt")
+    create_srt_file(arrSrt, srt_temp_path)
+
+    print(f"✅ Created SRT file: {srt_temp_path}", flush=True)
+
+    print(f"\n✅ done, đã inference xong với OmniVoice và tạo file SRT | duration={duration:.2f}s\n", flush=True)
     print(f"===========================================================================================================")
     print(f"===========================================================================================================\n\n\n")
 
-    return (omni.sampling_rate, result), status
+    return (omni.sampling_rate, result), status, srt_temp_path

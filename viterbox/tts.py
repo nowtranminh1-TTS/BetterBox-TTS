@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import math
+import tempfile, os
 
 from pedalboard import Pedalboard as PB, PitchShift
 from torch.types import Tensor
@@ -29,6 +30,7 @@ from general.general_tool_audio import (
     normalize_text,
     fix_silent_and_speed_audio,
     clearText,
+    create_srt_file,
 )
 from .tts_helper.tts_TTSConds import TTSConds
 from .tts_helper.tts_numberToken import getNumberTokenText
@@ -337,6 +339,10 @@ class Viterbox(ViterboxExtensionMixin):
         join_before:  List[str]        = []
         pending_join: str              = "sentence"
 
+        # ── Create SRT file ─────────────────────────────────────────────────────
+        arrSrt: List[dict]      = []  # để làm file SRT, List chứa {startTime, endTime, text}
+        current_time: float      = 0.0  # Thời gian tích lũy (giây)
+
         # Cho phép UI bật/tắt mode theo runtime, không hard-code cố định
         advance_TTS = bool(advance_tts)
 
@@ -382,6 +388,22 @@ class Viterbox(ViterboxExtensionMixin):
                     audio_np = fix_silent_and_speed_audio(audio_np, self.sr,
                                                           threshold_ms=50,
                                                           silence_threshold_db=-60)
+                    # [SRT FILE] Tạo timing item cho segment này
+                    segment_duration = len(audio_np) / self.sr
+                    start_time = current_time
+                    end_time = current_time + segment_duration
+                    
+                    timing_item = {
+                        "startTime": start_time,
+                        "endTime": end_time,
+                        "text": spoken
+                    }
+                    arrSrt.append(timing_item)
+                    
+                    # [SRT FILE]Cập nhật current_time cho segment tiếp theo
+                    current_time = end_time
+
+                    print(f"   🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
                     if len(audio_np) > 0:
                         join_before.append(pending_join)
                         audio_pieces.append(audio_np)
@@ -394,6 +416,10 @@ class Viterbox(ViterboxExtensionMixin):
                     torch.cuda.empty_cache()
                 gc.collect()
             else:
+                # [SRT FILE] Cộng thời gian pause của dấu câu vào current_time
+                pause_seconds = seg['pause_ms'] / 1000.0
+                current_time = current_time + pause_seconds
+
                 pending_join = f"pause:{seg['pause_ms']}"
 
 # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
@@ -411,16 +437,8 @@ class Viterbox(ViterboxExtensionMixin):
             silence = np.zeros(int(self.sr * ms / 1000), dtype=result.dtype)
             result  = np.concatenate([result, silence, audio_pieces[i]])
 
-        # nếu dấu câu dài quá, thì giới hạn mức 200ms cho mỗi dấu câu
-        result = fix_silent_and_speed_audio(
-            result,
-            self.sr,
-            threshold_ms=200,
-            silence_threshold_db=-60,
-        )
-
-        # pedalboard hoặc model AI hiện tại trong project, có xử lý được tốc độ nhanh / chậm cho âm thanh?
-        # nếu có thì dùng ngay ở đây, không thì bỏ qua
+        # KHÔNG SỬ DỤNG 'fix_silent_and_speed_audio'. 
+        # vì user nhập dấu câu thế nào thì khoảng lặng giữa các câu giữ nguyên như config
 
         # Skip audio processing if requested
         if not skip_processing:
@@ -439,11 +457,22 @@ class Viterbox(ViterboxExtensionMixin):
                 silence = np.zeros((trailing_samples, result.shape[1]), dtype=result.dtype)
             result = np.concatenate([result, silence], axis=0)
 
-        print(f"\n------------------ CREATE TTS ✅ done, CREATE TTS ✅ done, CREATE TTS ✅ done--------------------------")
+        duration = len(result) / self.sr
+        status = f"✅ Generated (Viterbox)! | {duration:.2f}s | {language.upper()}"
+
+        # [SRT FILE] Tạo file SRT trong temp directory để Gradio có thể trả về
+        
+        gradio_temp = os.environ.get("GRADIO_TEMP_DIR", tempfile.gettempdir())
+        srt_temp_path = os.path.join(gradio_temp, f"viterbox_srt_{hash(text) % 1000000}.srt")
+        create_srt_file(arrSrt, srt_temp_path)
+
+        print(f"✅ Created SRT file: {srt_temp_path}", flush=True)
+
+        print(f"\n✅ done, đã inference xong với Viterbox và tạo file SRT | duration={duration:.2f}s\n", flush=True)
         print(f"===========================================================================================================")
         print(f"===========================================================================================================\n\n\n")
 
-        return torch.from_numpy(result).unsqueeze(0)
+        return (torch.from_numpy(result).unsqueeze(0)), status, srt_temp_path
 
     # ── Advance inference ──────────────────────────────────────────────────────
 

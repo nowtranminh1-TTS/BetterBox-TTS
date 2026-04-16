@@ -20,13 +20,13 @@ def generate_speech_viterbox(
 ):
     """Generate speech from text"""
     if not text.strip():
-        return None, "❌ Please enter some text"
+        return None, "❌ Please enter some text", None
 
     # Nếu user không upload, dùng dropdown mặc định.
     ref_path = reference_audio
 
     if ref_path is None:
-        return None, "❌ No reference audio! Add .wav files to wavs/ folder"
+        return None, "❌ No reference audio! Add .wav files to wavs/ folder", None
 
     try:
         # Handle audio processing options
@@ -55,7 +55,7 @@ def generate_speech_viterbox(
             gen_repetition_penalty = ui_repetition_penalty
 
         # Generate
-        wav = MODEL.generate(
+        wav, gen_status, srt_path = MODEL.generate(
             text=text.strip(),
             language=language,
             audio_prompt=ref_path,
@@ -85,9 +85,9 @@ def generate_speech_viterbox(
         if model_emotion_profile != "AI-custom":
             status += f" | 🧠 {me_profile.display_name}"
 
-        return (MODEL.sr, audio_np), status
+        return (MODEL.sr, audio_np), status, srt_path
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return None, f"❌ Error: {str(e)}"
+        return None, f"❌ Error: {str(e)}", None
