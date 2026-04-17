@@ -1,0 +1,1 @@
+file text nên để đuôi .txt, file âm thanh nên để đuôi .wav. và cả 2 file cần trùng tên nhau
