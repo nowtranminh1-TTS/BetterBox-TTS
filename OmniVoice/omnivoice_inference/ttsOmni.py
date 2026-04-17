@@ -28,6 +28,7 @@ from general.general_tool_audio import (
     clearText,
     create_srt_file,
     addConfigText,
+    addConfigText_2
 )
 
 def _import_omnivoice_class():
@@ -135,6 +136,7 @@ def generate_speech_omni(
     text: str,
     language: str = "vi",
     reference_audio: Optional[str] = None,
+    ref_text: Optional[str] = None,
     speed: float = 1.0,
 ):
     if not (text or "").strip():
@@ -184,13 +186,14 @@ def generate_speech_omni(
         if seg["type"] == SEGMENT_TEXT:
 
             spoken = seg["content"]
-            print(f"\n  🔊 Omni Generating: {spoken}")
+            print(f"\n  🔊🔊🔊 Omni Generating: {spoken}\n")
 
-            spoken = addConfigText(spoken)
+            #spoken = addConfigText_2(spoken)
 
             audios = omni._inferWithModelOmni(
                 text=spoken.strip(),
                 reference_audio=reference_audio,
+                ref_text=ref_text,
                 language=language,
                 speed=speed,
             )

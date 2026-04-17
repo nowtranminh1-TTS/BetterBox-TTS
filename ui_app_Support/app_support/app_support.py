@@ -91,22 +91,43 @@ def _config_file_path() -> Path:
     return Path(SAVE_FILE)
 
 
+def get_wavs_dir() -> Path:
+    """
+    Trả về Path đến folder 'wavs' trong dự án.
+    Ưu tiên: 1) CWD nếu có wavs/, 2) Project root (tính từ file này)
+    """
+
+    # 1. Kiểm tra CWD/wavs
+    cwd_wavs = Path("wavs")
+    if cwd_wavs.is_dir():
+        #print(f"log path file cwd_wavs {cwd_wavs.resolve()}")
+        return cwd_wavs.resolve()
+
+    # 2. Tính từ vị trí file này: ui_app_Support/app_support/app_support.py -> project root
+    # Đi lên 3 cấp: app_support/ -> ui_app_Support/ -> project root
+    project_root = Path(__file__).parent.parent.parent
+    project_wavs = project_root / "wavs"
+    if project_wavs.is_dir():
+        print(f"log path file project_wavs {project_wavs}")
+        return project_wavs
+
+    
+    # 4. Fallback: tạo folder wavs ở CWD nếu chưa tồn tại
+    cwd_wavs.mkdir(exist_ok=True)
+    return cwd_wavs.resolve()
+
+
 # ── Voices ────────────────────────────────────────────────────────────────────
 
 def list_voices() -> list[str]:
-    """List available voice files (ưu tiên wavs trong _internal khi chạy exe)."""
-    candidates: list[Path] = []
-    bd = _pyinstaller_bundle_dir()
-    if bd is not None:
-        candidates.append(bd / "wavs")
-    candidates.append(Path("wavs"))
-    for wav_dir in candidates:
-        if wav_dir.is_dir():
-            return sorted([str(f) for f in wav_dir.glob("*.wav")])
+    """List available voice files từ folder wavs trong dự án."""
+    wav_dir = get_wavs_dir()
+    if wav_dir.is_dir():
+        return sorted([str(f) for f in wav_dir.glob("*.wav")])
     return []
 
 
-def _get_default_voice(voices: list[str]) -> str | None:
+def get_default_voice(voices: list[str]) -> str | None:
     """Ưu tiên file mặc định, nếu không có thì lấy file đầu tiên."""
     if not voices:
         return None
@@ -160,7 +181,7 @@ def _slugify_filename_from_text(text: str, max_words: int = 5) -> str:
     return "_".join(words)
 
 
-def save_generated_audio(audio_data, text: str, folder_path: str, srt_path: str = None):
+def save_generated_audio_and_srt(audio_data, text: str, folder_path: str, srt_path: str):
     """Lưu audio đã sinh vào thư mục chỉ định trong UI, và copy SRT nếu có."""
 
     if audio_data is None:
@@ -188,18 +209,27 @@ def save_generated_audio(audio_data, text: str, folder_path: str, srt_path: str 
         try:
             sf.write(str(final_path), audio_np, sr)
         except Exception as e:
-            return f"❌ Không thể lưu audio: {str(e)}", None
+            print(f"❌ Không thể lưu audio: {str(e)}")
 
-    # Copy SRT file nếu có và folder_path được chỉ định
+    # Copy SRT file (sử dụng hoàn toàn logic fallback và try-except, không dùng if)
     srt_final_path = None
-    if srt_path and Path(srt_path).exists() and folder_path and folder_path.strip():
+    actual_srt_path = srt_path[0] if isinstance(srt_path, (list, tuple)) else srt_path
+    
+    srt_name = f"{base_name}_{rand_id}.srt"
+    srt_out_path = out_dir / srt_name
+    srt_fallback_path = fallback_dir / srt_name
+    
+    srt_final_path = srt_out_path
+    try:
+        shutil.copyfile(str(actual_srt_path), str(srt_out_path))
+    except Exception:
+        srt_final_path = srt_fallback_path
         try:
-            srt_name = f"{base_name}_{rand_id}.srt"
-            srt_dest = out_dir / srt_name
-            shutil.copyfile(str(srt_path), str(srt_dest))
-            srt_final_path = str(srt_dest)
+            shutil.copyfile(str(actual_srt_path), str(srt_fallback_path))
         except Exception as e:
-            print(f"⚠️ Không thể copy SRT: {e}")
+            # Nếu tất cả đều thất bại (ví dụ srt_path là None hoặc file không tồn tại), im lặng gán None
+            srt_final_path = None
+            print(f"❌ Không thể lưu SRT: {str(e)}")
 
     # Trả file trong thư mục temp của app để Gradio không báo InvalidPathError.
     temp_export = Path(os.environ["GRADIO_TEMP_DIR"]) / final_path.name

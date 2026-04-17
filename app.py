@@ -50,9 +50,9 @@ from ui_app_Support.app_support.app_model_management import (
 )
 from ui_app_Support.app_support.app_support import (
     CSS, APP_INIT_JS,
-    list_voices, _get_default_voice,
+    list_voices, get_default_voice, get_wavs_dir,
     save_path, load_path,
-    save_generated_audio,
+    save_generated_audio_and_srt,
     run_build_voice_profile, run_copy_profile_to_model,
 )
 
@@ -157,9 +157,11 @@ with gr.Blocks(
         # Right - Voice & Settings
         with gr.Column(scale=1, elem_classes=["card"]):
             gr.HTML('<div class="section-title">🎤 Reference Voice</div>')
-
+            gr.HTML('''<div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); border-left: 4px solid #4fc3f7; border-radius: 8px; padding: 12px 16px; margin: 8px 0; font-size: 13px; color: #ffffff; line-height: 1.5;">
+                <span style="color: #4fc3f7; font-weight: bold;">💡 Tip:</span> Để OmniVoice cho kết quả chính xác nhất, hãy đặt file <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #ffffff;">.wav</code> và <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #fff;">.txt</code> cùng tên trong folder wavs/
+            </div>''')      
             wav_files = list_voices()
-            default_voice = _get_default_voice(wav_files)
+            default_voice = get_default_voice(wav_files)
             if wav_files:
                 ref_dropdown = gr.Dropdown(
                     choices=[(Path(f).stem, f) for f in wav_files],
@@ -288,11 +290,34 @@ with gr.Blocks(
                 traceback.print_exc()
                 return None, f"❌ Omni load error: {str(e)}"
 
+            # Lấy ref_text từ file txt cùng tên với file audio trong folder wavs/
+            ref_audio_path = data[ref_audio]
+
+            # Lấy tên file (không extension) từ đường dẫn temp của Gradio
+            audio_filename = Path(ref_audio_path).stem
+
+            # Tìm file .txt trong đúng folder wavs/
+            wavs_dir = get_wavs_dir()
+            ref_text_path = wavs_dir / f"{audio_filename}.txt"
+            ref_text = None
+            if ref_text_path.exists():
+                try:
+                    with open(ref_text_path, "r", encoding="utf-8") as f:
+                        ref_text = f.read().strip()
+                except Exception:
+                    ref_text = None
+
+            print(f"\n📁 wavs_dir: {wavs_dir}")
+            print(f"📝 ref_text_path: {ref_text_path}")
+            print(f"🎵 audio path (temp): {ref_audio_path}")
+            print(f"📄 ref_text: {'Found' if ref_text else 'None'}\n")        
+
             audio_out, status, srtFileResult = generate_speech_omni(
                 omni=omni_model,
                 text=data[text_input],
                 language=data[language],
                 reference_audio=data[ref_audio],
+                ref_text=ref_text,
                 speed=data[ai_speed],
             )
             if switched and status:
@@ -369,7 +394,7 @@ with gr.Blocks(
     )
 
     save_audio_btn.click(
-        fn=save_generated_audio,
+        fn=save_generated_audio_and_srt,
         inputs=[output_audio, text_input, folder_input, srt_file],
         outputs=[status_text, saved_file],
     )

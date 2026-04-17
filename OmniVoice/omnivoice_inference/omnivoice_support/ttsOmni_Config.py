@@ -1,10 +1,66 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     # Relative import: 3 levels up (omnivoice_support -> omnivoice_inference -> OmniVoice root)
     from ...omnivoice.models.omnivoice import OmniVoice
+    from ...omnivoice.models.omnivoice import VoiceClonePrompt
+
+
+# Global cache cho voice_clone_prompt
+_voice_clone_cache: dict[str, Any] = {}
+_CACHE_FILE = Path(__file__).parent / "voice_clone_prompt_cache.json"
+
+
+def _get_cache_key(ref_audio: str, ref_text: Optional[str]) -> str:
+    """Tạo unique key từ ref_audio path và ref_text."""
+    # Sử dụng hash của ref_audio path + ref_text content
+    key_data = f"{ref_audio}:{ref_text or ''}"
+    return hashlib.md5(key_data.encode('utf-8')).hexdigest()
+
+
+def _load_cache_from_disk() -> dict[str, Any]:
+    """Load cache từ file nếu tồn tại."""
+    global _voice_clone_cache
+    if _CACHE_FILE.exists():
+        try:
+            with open(_CACHE_FILE, 'r', encoding='utf-8') as f:
+                _voice_clone_cache = json.load(f)
+        except Exception:
+            _voice_clone_cache = {}
+    return _voice_clone_cache
+
+
+def _save_cache_to_disk():
+    """Lưu cache ra file."""
+    try:
+        with open(_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_voice_clone_cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"⚠️ Không thể lưu cache: {e}")
+
+
+def _get_cached_prompt(cache_key: str) -> Optional[Any]:
+    """Lấy cached prompt từ memory hoặc disk."""
+    global _voice_clone_cache
+    if cache_key in _voice_clone_cache:
+        return _voice_clone_cache[cache_key]
+    # Thử load từ disk nếu memory cache trống
+    _load_cache_from_disk()
+    return _voice_clone_cache.get(cache_key)
+
+
+def _set_cached_prompt(cache_key: str, prompt: Any):
+    """Lưu prompt vào cache."""
+    global _voice_clone_cache
+    _voice_clone_cache[cache_key] = prompt
+    _save_cache_to_disk()
+
 
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
@@ -13,11 +69,14 @@ def inferWithModelOmni(
     self,
     text: str,
     reference_audio: str,
+    ref_text: Optional[str] = None,  # Thêm transcript của giọng mẫu để clone chính xác hơn
     language: Optional[str] = "vi",
     speed: float = 1.0,
+   # duration: Optional[float] = None,  # Thêm để kiểm soát tốc độ đọc cố định
 ):
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 
+    print(f" 📑 Reference text cho voice: {ref_text}\n")
     # Chỉnh các tham số cho 'class OmniVoiceGenerationConfig' bên trong thư viện.
     # Chỉ chỉnh sửa ở đây, không động vào bên trong thư viện.
 
@@ -54,19 +113,62 @@ def inferWithModelOmni(
     # postprocess_output: ưu tiên chính xác nội dung âm vị -> để False để tránh bị cắt mất âm cuối.
     postprocess_output: Optional[bool] = False  # tối thiểu: False, tối đa: True
 
-    # audio_chunk_duration: mỗi chunk dài hơn thì ít điểm nối hơn (thường chính xác ngữ điệu tốt hơn) nhưng tốn VRAM hơn.
-    audio_chunk_duration: Optional[float] = 30.0  # tối thiểu: 5.0, tối đa: 30.0 | khuyến nghị chính xác: 18-24
+    # audio_chunk_duration: mỗi chunk dài hơn thì ít điểm nối hơn (thường ngữ điệu tốt hơn) nhưng tốn VRAM hơn. 
+    # giảm thì lại chính xác hơn cho việc đọc text đầu vào
+    # nếu text ngắn (< 30-60 giây), nên để audio_chunk_duration = 0 để tắt chunking hoàn toàn.
+    audio_chunk_duration: Optional[float] = 0.0  # tối thiểu: 5.0, tối đa: 30.0 | khuyến nghị chính xác: 18-24
 
     # audio_chunk_threshold: tăng cao để HẠN CHẾ chunking (ít đứt mạch, thường chính xác hơn cho câu vừa/ngắn).
     audio_chunk_threshold: Optional[float] = 60.0  # tối thiểu: 10.0, tối đa: 60.0 | khuyến nghị chính xác: 45-60
 
     model: OmniVoice = self.loadModelOmni()  # type: ignore[assignment]
-    
+
+    # --- Voice Clone Prompt Caching ---
+    # Tạo cache key từ ref_audio và ref_text
+    cache_key = _get_cache_key(reference_audio, ref_text)
+    cached_prompt_data = _get_cached_prompt(cache_key)
+
+    voice_clone_prompt = None
+    if cached_prompt_data is not None:
+        # Reconstruct VoiceClonePrompt từ cache
+        try:
+            import torch
+            from ...omnivoice.models.omnivoice import VoiceClonePrompt
+            ref_audio_tokens = torch.tensor(cached_prompt_data['ref_audio_tokens'], dtype=torch.long)
+            voice_clone_prompt = VoiceClonePrompt(
+                ref_audio_tokens=ref_audio_tokens,
+                ref_text=cached_prompt_data['ref_text'],
+                ref_rms=cached_prompt_data['ref_rms'],
+            )
+            print(f"♻️  Sử dụng cached voice_clone_prompt cho: {Path(reference_audio).name}")
+        except Exception as e:
+            print(f"⚠️ Cache corrupted, recreate: {e}")
+            voice_clone_prompt = None
+
+    if voice_clone_prompt is None:
+        # Tạo mới và cache lại
+        print(f"🆕 🔊 ⿻ Tạo voice_clone_prompt mới cho: {Path(reference_audio).name}")
+        voice_clone_prompt = model.create_voice_clone_prompt(
+            ref_audio=reference_audio,
+            ref_text=ref_text,
+            preprocess_prompt=preprocess_prompt if preprocess_prompt is not None else True,
+        )
+        # Lưu vào cache (convert tensor sang list để JSON serializable)
+        cache_data = {
+            'ref_audio_tokens': voice_clone_prompt.ref_audio_tokens.cpu().tolist(),
+            'ref_text': voice_clone_prompt.ref_text,
+            'ref_rms': voice_clone_prompt.ref_rms,
+        }
+        _set_cached_prompt(cache_key, cache_data)
+    # --- End Caching ---
+
     generate_kwargs = {
         "text": text,
         "language": language,
-        "ref_audio": reference_audio,
+        # Sử dụng voice_clone_prompt đã cache để tăng tốc batch processing
+        "voice_clone_prompt": voice_clone_prompt,
         "speed": speed,
+       # "duration": duration,  # Kiểm soát tốc độ đọc cố định (tránh nhanh/ngắn khác nhau)
     }
     if num_step is not None:
         generate_kwargs["num_step"] = num_step

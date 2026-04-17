@@ -30,6 +30,14 @@ https://huggingface.co/dolly-vn/viterbox/tree/main
 https://huggingface.co/k2-fsa/OmniVoice/tree/main
 
 
+## một vài lưu ý về reference sound: 
+- 1. file text nên để đuôi .txt, file âm thanh nên để đuôi .wav. và cả 2 file cần trùng tên nhau
+- 2. file text và âm thanh của 'reference_sound' (nằm trong folder 'wavs') cần giống tên nhau, để model Omnivoice lấy mẫu tốt nhất. vì file text sẽ được đưa vào model Omnivoice để nó học giọng mẫu
+- 3. với model Omnivoice, file text và âm thanh nên từ 3 - 10 giây là đủ
+- 4. với model viterbox TTS, file text có thể tối đa 80 giây, nhưng khi inference sẽ chậm và tốn VRAM
+
+## một vài lưu ý về text cho audio. 
+- text dài bao nhiêu cũng được, miễn là, khoảng cách text giữa các dấu câu ( text dài,đọc liên hồi, không ngắt nghỉ) đừng dài quá 30 giây là được
 
 ## 📁 Cấu trúc dự án
 
