@@ -181,9 +181,9 @@ hoặc sau khi có venv, thì chạy file 'runApp.bat' - file tự động bật
    Acoustic context (Perceiver Average) tổng hợp từ tối đa 20 cửa sổ x 80s (~26 phút).
 4. trong folder 'viterbox/pretrained' đã để sẵn audio và text (tạo bởi AI) để chạy chức năng này
 
-Audio prompt khi chạy app nên cùng giọng với audio đã dùng để build profile.  
-Kết quả build là file `conds.pt` trong `viterbox/output-profile/`.  
-Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app), file sẽ được copy vào `viterbox/modelViterboxLocal/`.
+- Audio prompt khi chạy app nên cùng giọng với audio đã dùng để build profile.  
+- Kết quả build là file `conds.pt` trong `viterbox/output-profile/`.  
+- Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app), file sẽ được copy vào `viterbox/modelViterboxLocal/`.
 
 ---
 
@@ -192,14 +192,6 @@ Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app)
 - **Audio mẫu**: Nên sử dụng audio sạch, không nhiễu, 3-10 giây
 - **VRAM**: Model cần ~6GB VRAM, nếu không đủ có thể dùng CPU (chậm hơn)
 - **Văn bản**: Hỗ trợ tốt nhất với văn bản có dấu đầy đủ
-
----
-
-## 🙏 Credits
-
-- **Base Model**: [Chatterbox](https://github.com/resemble-ai/chatterbox) by Resemble AI
-- **Datasets**: ViVoice, PhoAudiobook, Dolly-Audio
-- **Fine-tuning**: [Dolly VN](https://github.com/dolly-vn) - Speech Team @ [ContextBoxAI](https://contextbox.ai)
 
 ---
 
@@ -213,10 +205,6 @@ Dùng nút `Copy -> modelViterboxLocal` để app dùng ngay (cần restart app)
 - ❌ **KHÔNG** được sử dụng cho mục đích xấu xa
 - file audio là người thật đọc, mình lấy từ tiktok.
 
-Liên hệ thương mại: [contextbox.ai](https://contextbox.ai)
-
 ---
-
-**Made with ❤️ by [Dolly VN](https://github.com/dolly-vn) @ [ContextBoxAI](https://contextbox.ai)**
 
 [⬆ Về đầu trang](#️-betterbox-tts)
