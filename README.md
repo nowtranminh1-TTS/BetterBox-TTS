@@ -89,15 +89,28 @@ viterbox-TTS=GPU/
 
 ```bash
 # Clone repo
+git clone https://github.com/nowtranminh1-TTS/BetterBox-TTS.git
+
+# vào thư mục viterbox
 cd viterbox
 
 # Tạo virtual environment (khuyến nghị) - tạo trong thư mục viterbox
 python -m venv venv
+
+# bật venv lên - bắt buộc để cài được lib
 source venv/bin/activate  # Linux/Mac
 # hoặc: venv\Scripts\activate  # Windows
 
+# back ra ngoài 
+cd ..
+
+# vào thư mục general - để cài các lib có trong file 'requirements.txt'
+cd general
+
 # Cài đặt dependencies
-pip install -r general/requirements.txt
+pip install -r requirements.txt
+
+# sau khi đã cài venv + download model về local. sau này chỉ cần click file 'runApp.bat' - file tự động bật venv và chạy
 ```
 
 ### Cài đặt với pip
@@ -110,13 +123,13 @@ pip install -e .
 
 ## 🚀 Sử dụng
 
-### 1. Giao diện Web (Gradio)
+### 1. Giao diện Web (Gradio) - nhớ bật venv trước khi chạy
 
 ```bash
 python app.py
 ```
 
-Mở trình duyệt tại `http://localhost:7860`
+Mở trình duyệt tại `http://localhost:7860` hoặc `http://127.0.0.1:7860`
 
 hoặc sau khi có venv, thì chạy file 'runApp.bat' - file tự động bật venv và chạy
 
