@@ -17,10 +17,23 @@ _voice_clone_cache: dict[str, Any] = {}
 _CACHE_FILE = Path(__file__).parent / "voice_clone_prompt_cache.json"
 
 
+def _get_file_hash(file_path: str) -> str:
+    """Tạo hash từ nội dung file (first 64KB để nhanh)."""
+    try:
+        hasher = hashlib.md5()
+        with open(file_path, 'rb') as f:
+            # Đọc 64KB đầu tiên là đủ để phân biệt các file khác nhau
+            hasher.update(f.read(65536))
+        return hasher.hexdigest()[:16]  # Chỉ lấy 16 chars đủ unique
+    except Exception:
+        return ""
+
+
 def _get_cache_key(ref_audio: str, ref_text: Optional[str]) -> str:
-    """Tạo unique key từ ref_audio path và ref_text."""
-    # Sử dụng hash của ref_audio path + ref_text content
-    key_data = f"{ref_audio}:{ref_text or ''}"
+    """Tạo unique key từ ref_audio path + content hash + ref_text."""
+    # Hash nội dung file để phát hiện file thay đổi dù path giống nhau (Gradio temp file)
+    file_hash = _get_file_hash(ref_audio)
+    key_data = f"{ref_audio}:{file_hash}:{ref_text or ''}"
     return hashlib.md5(key_data.encode('utf-8')).hexdigest()
 
 
