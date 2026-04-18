@@ -117,6 +117,9 @@ def inferWithModelOmni(
     if len(text.strip().split()) == 1:
         text = addConfigText(text)
         print(f"\n🍂🎧text ĐƠN LẺ trước khi inference TTS {text}\n")
+    else:
+        text = addConfigText(text)
+        print(f"\n🧩🎧🧩text PHRASE trước khi inference TTS {text}\n")
 
     print(f" 📑 Reference text cho voice: {ref_text}\n")
     # Chỉnh các tham số cho 'class OmniVoiceGenerationConfig' bên trong thư viện.
