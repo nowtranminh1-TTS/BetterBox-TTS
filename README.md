@@ -25,8 +25,11 @@
 (tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
 https://huggingface.co/dolly-vn/viterbox/tree/main
 
+# 🔧 tải model Omnivoice (bản fine-tune tiếng việt) và đưa vào folder 'OmniVoice/modelOmniLocal' 
+https://huggingface.co/splendor1811/omnivoice-vietnamese/tree/main
 
-# 🔧 tải model Omnivoice và đưa vào folder 'OmniVoice/modelOmniLocal' 
+
+# 🔧 hoặc, tải model Omnivoice (bản gốc) và đưa vào folder 'OmniVoice/modelOmniLocal' 
 https://huggingface.co/k2-fsa/OmniVoice/tree/main
 
 
