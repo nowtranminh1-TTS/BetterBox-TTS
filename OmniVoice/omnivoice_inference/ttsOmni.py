@@ -223,7 +223,7 @@ def generate_speech_omni(
             getFirstAudio = audios[0]
             audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
                                                   threshold_ms=50,
-                                                  silence_threshold_db=-60)
+                                                  silence_threshold_db=-40)
 
             # [SRT FILE] Tạo timing item cho segment này
             segment_duration = len(audio_np) / omni.sampling_rate

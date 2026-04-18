@@ -8,12 +8,21 @@ import librosa
 
 # ── Pause config ──────────────────────────────────────────
 # Pause durations (ms) per punctuation class
+# _PUNCT_PAUSE_MS = {
+#     ".":  450, "!": 450, "?": 450, "。": 450, "！": 450, "？": 450,
+#     ",":  200, "，": 200, "、": 200,
+#     ";":  250, "；": 250,
+#     ":":  200, "：": 200,
+#     "/":  150, "…": 300, "-": 120, "—": 150, "–": 150,
+# }
+
+# giảm 50ms mỗi dấu câu
 _PUNCT_PAUSE_MS = {
-    ".":  450, "!": 450, "?": 450, "。": 450, "！": 450, "？": 450,
-    ",":  200, "，": 200, "、": 200,
-    ";":  250, "；": 250,
-    ":":  200, "：": 200,
-    "/":  150, "…": 300, "-": 120, "—": 150, "–": 150,
+    ".":  400, "!": 400, "?": 400, "。": 400, "！": 400, "？": 400,
+    ",":  150, "，": 150, "、": 150,
+    ";":  200, "；": 200,
+    ":":  150, "：": 150,
+    "/":  100, "…": 250, "-": 70, "—": 100, "–": 100,
 }
 
 WAVS_DIR = Path("wavs")
@@ -144,7 +153,7 @@ def fix_silent_and_speed_audio(
     audio: np.ndarray,
     sr: int, # input framerate
     threshold_ms: int = 50,
-    silence_threshold_db: float = -60.0  # ngưỡng dB để xác định silent. càng cao càng là có tiếng nói. VD: -18 dB chắc chắn là người nói
+    silence_threshold_db: float = -40.0  # ngưỡng dB để xác định silent. càng cao càng là có tiếng nói. VD: -18 dB chắc chắn là người nói
 ) -> np.ndarray:
     if len(audio) == 0:
         return audio

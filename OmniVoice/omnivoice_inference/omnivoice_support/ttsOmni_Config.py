@@ -218,6 +218,7 @@ def inferWithModelOmni(
         "language": language,
         # Sử dụng voice_clone_prompt đã cache để tăng tốc batch processing
         "voice_clone_prompt": voice_clone_prompt,
+        #"instruct": "female, young adult, high pitch, whisper",
         "speed": speed,
        # "duration": duration,  # Kiểm soát tốc độ đọc cố định (tránh nhanh/ngắn khác nhau)
     }
