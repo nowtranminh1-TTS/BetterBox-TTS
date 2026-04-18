@@ -367,7 +367,7 @@ class Viterbox(ViterboxExtensionMixin):
                     )
                 else:
                     spoken = seg["content"]
-                    print(f"\n  🔊 Generating: {spoken}")
+                    print(f"\n  🔊📢🔊 Viterbox Generating: {spoken}")
 
                     # chỉ xài trước khi inference, chú ý chỗ xài, không xài trong '_generate_single'
                     getSpoken = punc_norm(spoken, True)
@@ -403,7 +403,7 @@ class Viterbox(ViterboxExtensionMixin):
                     # [SRT FILE]Cập nhật current_time cho segment tiếp theo
                     current_time = end_time
 
-                    print(f"   🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
+                    print(f"  🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
                     if len(audio_np) > 0:
                         join_before.append(pending_join)
                         audio_pieces.append(audio_np)
@@ -489,7 +489,7 @@ class Viterbox(ViterboxExtensionMixin):
         getContent   = normalize_text(getContent, language)
         bunchOfText  = getContent.split()
 
-        print(f"\n  🔊 Generating: {spoken}")
+        print(f"\n  🔊📢🔊 Viterbox Generating: {spoken}")
 
         list_audio_result: List[np.ndarray] = []
 

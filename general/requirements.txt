@@ -22,3 +22,4 @@ resemble-perth==1.0.1
 omegaconf==2.3.0
 pedalboard
 pydub
+datasets>=2.14.0

@@ -123,15 +123,6 @@ def addConfigText(text: str) -> str:
 
     return text
 
-def addConfigText_2(text: str) -> str:
-    # Thêm pause tự nhiên đầu và cuối
-
-    # DO NOT CHANGE THIS CONFIG. WE TEST MANY TIMES, THIS IS THE BEST CONFIG FOR MOST CASES. THANK YOU.
-    # change it will cause bugs
-    text = '"' + text + '"'         # best config
-
-    return text
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # trick 4 áp dụng cho các model kiểu cũ: text -> audio token -> audio wave

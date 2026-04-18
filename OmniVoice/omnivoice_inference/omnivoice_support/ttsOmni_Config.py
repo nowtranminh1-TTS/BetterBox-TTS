@@ -11,30 +11,55 @@ if TYPE_CHECKING:
     from ...omnivoice.models.omnivoice import OmniVoice
     from ...omnivoice.models.omnivoice import VoiceClonePrompt
 
+from general.general_tool_audio import (
+    addConfigText
+)
 
 # Global cache cho voice_clone_prompt
 _voice_clone_cache: dict[str, Any] = {}
 _CACHE_FILE = Path(__file__).parent / "voice_clone_prompt_cache.json"
 
 
-def _get_file_hash(file_path: str) -> str:
-    """Tạo hash từ nội dung file (first 64KB để nhanh)."""
+def _get_file_fingerprint(file_path: str) -> str:
+    """
+    Tạo fingerprint duy nhất cho file bao gồm:
+    - File size (để phát hiện thay đổi nhanh)
+    - Mtime (thời gian sửa đổi)
+    - Hash toàn bộ nội dung file
+    """
     try:
+        stat = os.stat(file_path)
+        file_size = stat.st_size
+        mtime = stat.st_mtime
+
+        # Hash toàn bộ file thay vì chỉ 64KB đầu
         hasher = hashlib.md5()
         with open(file_path, 'rb') as f:
-            # Đọc 64KB đầu tiên là đủ để phân biệt các file khác nhau
-            hasher.update(f.read(65536))
-        return hasher.hexdigest()[:16]  # Chỉ lấy 16 chars đủ unique
-    except Exception:
+            # Đọc từng chunk để tránh load file lớn vào memory
+            while True:
+                chunk = f.read(8192)  # 8KB chunks
+                if not chunk:
+                    break
+                hasher.update(chunk)
+
+        content_hash = hasher.hexdigest()
+        # Kết hợp size + mtime + content hash để đảm bảo unique
+        return f"{file_size}:{mtime}:{content_hash}"
+    except Exception as e:
+        print(f"⚠️ Lỗi khi tạo fingerprint: {e}")
         return ""
 
 
 def _get_cache_key(ref_audio: str, ref_text: Optional[str]) -> str:
-    """Tạo unique key từ ref_audio path + content hash + ref_text."""
-    # Hash nội dung file để phát hiện file thay đổi dù path giống nhau (Gradio temp file)
-    file_hash = _get_file_hash(ref_audio)
-    key_data = f"{ref_audio}:{file_hash}:{ref_text or ''}"
-    return hashlib.md5(key_data.encode('utf-8')).hexdigest()
+    """Tạo unique key từ ref_audio fingerprint + ref_text."""
+    # Dùng fingerprint thay vì chỉ path để phát hiện file thay đổi chính xác
+    file_fingerprint = _get_file_fingerprint(ref_audio)
+    key_data = f"{file_fingerprint}:{ref_text or ''}"
+    cache_key = hashlib.md5(key_data.encode('utf-8')).hexdigest()
+
+    # Debug log để trace
+    print(f"🔍 Cache key: {cache_key[:8]}... | File: {Path(ref_audio).name} | Size: {file_fingerprint.split(':')[0] if file_fingerprint else '?'}")
+    return cache_key
 
 
 def _load_cache_from_disk() -> dict[str, Any]:
@@ -89,6 +114,10 @@ def inferWithModelOmni(
 ):
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 
+    if len(text.strip().split()) == 1:
+        text = addConfigText(text)
+        print(f"\n🍂🎧text ĐƠN LẺ trước khi inference TTS {text}\n")
+
     print(f" 📑 Reference text cho voice: {ref_text}\n")
     # Chỉnh các tham số cho 'class OmniVoiceGenerationConfig' bên trong thư viện.
     # Chỉ chỉnh sửa ở đây, không động vào bên trong thư viện.
@@ -141,6 +170,11 @@ def inferWithModelOmni(
     cache_key = _get_cache_key(reference_audio, ref_text)
     cached_prompt_data = _get_cached_prompt(cache_key)
 
+    # Debug chi tiết
+    print(f"⚙️ 📂 Đường dẫn đầy đủ: {reference_audio}")
+    print(f"⚙️ 🔑 Cache key đầy đủ: {cache_key}")
+    print(f"⚙️ 💾 Có trong cache?: {cached_prompt_data is not None}\n")
+
     voice_clone_prompt = None
     if cached_prompt_data is not None:
         # Reconstruct VoiceClonePrompt từ cache
@@ -153,7 +187,7 @@ def inferWithModelOmni(
                 ref_text=cached_prompt_data['ref_text'],
                 ref_rms=cached_prompt_data['ref_rms'],
             )
-            print(f"♻️  Sử dụng cached voice_clone_prompt cho: {Path(reference_audio).name}")
+            print(f"♻️  Sử dụng cached voice_clone_prompt cho: {Path(reference_audio).name}\n")
         except Exception as e:
             print(f"⚠️ Cache corrupted, recreate: {e}")
             voice_clone_prompt = None
@@ -165,6 +199,7 @@ def inferWithModelOmni(
             ref_audio=reference_audio,
             ref_text=ref_text,
             preprocess_prompt=preprocess_prompt if preprocess_prompt is not None else True,
+            language=language,
         )
         # Lưu vào cache (convert tensor sang list để JSON serializable)
         cache_data = {

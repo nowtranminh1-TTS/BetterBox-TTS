@@ -1,13 +1,33 @@
 """
 Viterbox - Gradio Web Interface
 """
+# Set HF Hub env vars BEFORE importing transformers to disable warnings
+import os
+
+# Disable telemetry: Prevent Hugging Face from sending usage statistics/analytics
+# Điều này tránh các request ngầm đến HF Hub để báo cáo dữ liệu sử dụng
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
+# Force offline mode: Không gọi API đến HF Hub, chỉ dùng model local
+# Điều này tránh warning "unauthenticated requests" vì không còn request nào được gửi đi
+os.environ["HF_HUB_OFFLINE"] = "1"
+
+# Set dummy token để tránh warning "unauthenticated requests"
+# Vì đang ở offline mode, token này sẽ không được sử dụng cho bất kỳ request nào
+# nhưng sẽ làm hài lòng auth check của huggingface_hub
+os.environ["HF_TOKEN"] = "dummy"
+
+# Disable symlink warning: Tránh warning về việc Windows không hỗ trợ symlinks tốt
+# (thường xuất hiện khi HF Hub cố tạo symlink cho cache files)
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 import torch
 import warnings
 import gradio as gr
 
 warnings.filterwarnings('ignore')
 
-import tempfile, os
+import tempfile
 
 os.environ["GRADIO_TEMP_DIR"] = tempfile.gettempdir() + "/my_gradio_tmp"
 os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
@@ -290,15 +310,23 @@ with gr.Blocks(
                 traceback.print_exc()
                 return None, f"❌ Omni load error: {str(e)}"
 
-            # Lấy ref_text từ file txt cùng tên với file audio trong folder wavs/
-            ref_audio_path = data[ref_audio]
+            # Lấy ref_text và đường dẫn gốc từ folder wavs/ (thay vì dùng temp file của Gradio)
+            ref_audio_temp_path = data[ref_audio]
 
             # Lấy tên file (không extension) từ đường dẫn temp của Gradio
-            audio_filename = Path(ref_audio_path).stem
+            audio_filename = Path(ref_audio_temp_path).stem
 
-            # Tìm file .txt trong đúng folder wavs/
+            # Tìm file gốc trong folder wavs/
             wavs_dir = get_wavs_dir()
+            ref_audio_path = wavs_dir / f"{audio_filename}.wav"
             ref_text_path = wavs_dir / f"{audio_filename}.txt"
+
+            # Kiểm tra file gốc có tồn tại không
+            if not ref_audio_path.exists():
+                # Fallback: dùng temp path nếu không tìm thấy trong wavs/
+                ref_audio_path = Path(ref_audio_temp_path)
+
+            # Lấy ref_text
             ref_text = None
             if ref_text_path.exists():
                 try:
@@ -309,14 +337,15 @@ with gr.Blocks(
 
             print(f"\n📁 wavs_dir: {wavs_dir}")
             print(f"📝 ref_text_path: {ref_text_path}")
-            print(f"🎵 audio path (temp): {ref_audio_path}")
-            print(f"📄 ref_text: {'Found' if ref_text else 'None'}\n")        
+            print(f"🎵 audio path (temp): {ref_audio_temp_path}")
+            print(f"🎵 audio path (wavs): {ref_audio_path}")
+            print(f"📄 ref_text: {'Found' if ref_text else 'None'}\n")
 
             audio_out, status, srtFileResult = generate_speech_omni(
                 omni=omni_model,
                 text=data[text_input],
                 language=data[language],
-                reference_audio=data[ref_audio],
+                reference_audio=str(ref_audio_path),
                 ref_text=ref_text,
                 speed=data[ai_speed],
             )

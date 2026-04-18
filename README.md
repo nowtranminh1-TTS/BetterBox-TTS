@@ -6,7 +6,7 @@
 - 1. bổ sung tùy chọn model Omnivoice hoặc Viterbox ngoài UI. click chọn là chạy.
 - 2. fix bug UI
 - 3. thêm tính năng *TẠO SRT FILE* - khi generate audio thì file SRT cũng sẽ tự generate luôn
-- Note: hiện model Omnivoice còn thô sơ, chưa có chức năng ngắt câu theo dấu câu.  
+- Note: hiện model Omnivoice ĐÃ CÓ chức năng ngắt câu theo dấu câu.  
 
 ## một số tính năng mới - cho model Viterbox
 - 1. thêm điều chỉnh tốc độ trực tiếp trong model s3gen

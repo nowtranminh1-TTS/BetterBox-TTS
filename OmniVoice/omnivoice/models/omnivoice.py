@@ -312,6 +312,7 @@ class OmniVoice(PreTrainedModel):
     def transcribe(
         self,
         audio: Union[str, tuple],
+        language: Optional[str] = None,
     ) -> str:
         """Transcribe audio using the loaded Whisper ASR model.
 
@@ -319,6 +320,8 @@ class OmniVoice(PreTrainedModel):
             audio: File path or ``(waveform, sample_rate)`` tuple.
                 Waveform can be a numpy array or torch.Tensor of shape
                 ``(1, T)`` or ``(T,)``.
+            language: Language code (e.g., 'vi', 'en') for multilingual Whisper.
+                If None, auto-detect language.
 
         Returns:
             Transcribed text.
@@ -328,18 +331,33 @@ class OmniVoice(PreTrainedModel):
                 "ASR model is not loaded. Call model.load_asr_model() first."
             )
 
+        # Generate kwargs theo API mới của transformers để tránh warning
+        generate_kwargs = {"task": "transcribe"}
+        if language:
+            generate_kwargs["language"] = language
+        
+        # Lazy import datasets để tránh crash nếu thư viện không được cài
+        try:
+            from datasets import Dataset, Audio as DatasetAudio
+        except ImportError:
+            raise RuntimeError(
+                "Thư viện 'datasets' chưa được cài. "
+                "Vui lòng chạy: pip install datasets"
+            )
+        
         if isinstance(audio, str):
-            return self._asr_pipe(audio)["text"].strip()
+            # Dùng Dataset cho file path
+            dataset = Dataset.from_dict({"audio": [audio]}).cast_column("audio", DatasetAudio())
         else:
             waveform, sr = audio
             if isinstance(waveform, torch.Tensor):
                 waveform = waveform.cpu().numpy()
             waveform = np.squeeze(waveform)  # (1, T) or (T,) → (T,)
-            audio_input = {
-                "array": waveform,
-                "sampling_rate": sr,
-            }
-            return self._asr_pipe(audio_input)["text"].strip()
+            # Dùng Dataset cho waveform array
+            dataset = Dataset.from_dict({"audio": [{"array": waveform, "sampling_rate": sr}]})
+        
+        result = self._asr_pipe(dataset, generate_kwargs=generate_kwargs)
+        return result[0]["text"].strip()
 
     def get_input_embeddings(self):
         return self.llm.get_input_embeddings()
@@ -589,6 +607,7 @@ class OmniVoice(PreTrainedModel):
         ref_audio: Union[str, tuple[torch.Tensor, int]],
         ref_text: Optional[str] = None,
         preprocess_prompt: bool = True,
+        language: Optional[str] = None,
     ) -> VoiceClonePrompt:
         """Create a reusable voice clone prompt from reference audio.
 
@@ -601,6 +620,7 @@ class OmniVoice(PreTrainedModel):
             preprocess_prompt: If ``True`` (default), apply silence removal and
                 trimming to the reference audio, add punctuation in the end
                 of reference text (if not already)
+            language: Language code for auto-transcription (e.g., 'vi', 'en').
 
         Returns:
             A :class:`VoiceClonePrompt` that can be passed to :meth:`generate`.
@@ -666,7 +686,8 @@ class OmniVoice(PreTrainedModel):
             if self._asr_pipe is None:
                 logger.info("ASR model not loaded yet, loading on-the-fly ...")
                 self.load_asr_model()
-            ref_text = self.transcribe((ref_wav, self.sampling_rate))
+            # Truyền language để tránh warning và transcribe chính xác hơn
+            ref_text = self.transcribe((ref_wav, self.sampling_rate), language=language)
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
 
         chunk_size = self.audio_tokenizer.config.hop_length

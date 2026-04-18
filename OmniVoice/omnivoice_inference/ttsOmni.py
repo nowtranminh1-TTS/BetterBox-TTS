@@ -3,6 +3,30 @@ Minimal OmniVoice wrapper for Gradio app integration.
 """
 from __future__ import annotations
 
+# Set HF Hub env vars BEFORE importing transformers to disable warnings
+import os
+
+# Disable telemetry: Prevent Hugging Face from sending usage statistics/analytics
+# Điều này tránh các request ngầm đến HF Hub để báo cáo dữ liệu sử dụng
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
+# Force offline mode: Không gọi API đến HF Hub, chỉ dùng model local
+# Điều này tránh warning "unauthenticated requests" vì không còn request nào được gửi đi
+os.environ["HF_HUB_OFFLINE"] = "1"
+
+# Set dummy token để tránh warning "unauthenticated requests"
+# Vì đang ở offline mode, token này sẽ không được sử dụng cho bất kỳ request nào
+# nhưng sẽ làm hài lòng auth check của huggingface_hub
+os.environ["HF_TOKEN"] = "dummy"
+
+# Disable symlink warning: Tránh warning về việc Windows không hỗ trợ symlinks tốt
+# (thường xuất hiện khi HF Hub cố tạo symlink cho cache files)
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Suppress transformers logging
+import logging
+logging.getLogger("transformers").setLevel(logging.ERROR)
+
 from pathlib import Path
 from typing import Any, Optional, cast
 import sys
@@ -27,8 +51,7 @@ from general.general_tool_audio import (
     fix_silent_and_speed_audio,
     clearText,
     create_srt_file,
-    addConfigText,
-    addConfigText_2
+    addConfigText
 )
 
 def _import_omnivoice_class():
@@ -186,9 +209,7 @@ def generate_speech_omni(
         if seg["type"] == SEGMENT_TEXT:
 
             spoken = seg["content"]
-            print(f"\n  🔊🔊🔊 Omni Generating: {spoken}\n")
-
-            #spoken = addConfigText_2(spoken)
+            print(f"\n  🔊📢🔊 Omni Generating: {spoken}\n")
 
             audios = omni._inferWithModelOmni(
                 text=spoken.strip(),
@@ -219,7 +240,7 @@ def generate_speech_omni(
             # [SRT FILE]Cập nhật current_time cho segment tiếp theo
             current_time = end_time
             
-            print(f"   🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
+            print(f"  🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
             if len(audio_np) > 0:
                 join_before.append(pending_join)
                 audio_pieces.append(audio_np)
