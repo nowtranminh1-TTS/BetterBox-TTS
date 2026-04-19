@@ -5,6 +5,8 @@ from __future__ import annotations
 
 # Set HF Hub env vars BEFORE importing transformers to disable warnings
 import os
+import math
+from pedalboard import Pedalboard as PB, PitchShift
 
 # Disable telemetry: Prevent Hugging Face from sending usage statistics/analytics
 # Điều này tránh các request ngầm đến HF Hub để báo cáo dữ liệu sử dụng
@@ -50,9 +52,9 @@ from general.general_tool_audio import (
     normalize_text,
     fix_silent_and_speed_audio,
     clearText,
-    create_srt_file,
-    addConfigText
+    create_srt_file
 )
+from general.noise_detect_VAD import vad_trim
 
 def _import_omnivoice_class():
     try:
@@ -161,6 +163,7 @@ def generate_speech_omni(
     reference_audio: Optional[str] = None,
     ref_text: Optional[str] = None,
     speed: float = 1.0,
+    pitch_shift: float = 1.0,            # F0 scaling pitch: 0.5~2.0 (1.0=bình thường)
 ):
     if not (text or "").strip():
         return None, "❌ Please enter some text"
@@ -199,17 +202,16 @@ def generate_speech_omni(
     current_time: float      = 0.0  # Thời gian tích lũy (giây)
 
 # ----------------------------READY FOR INFERENCE TTS--------------------------
-    print(f"\n🚩bắt đầu inference audio với model OmniVoice: speed={speed}", flush=True)
+    print(f"\n🚩bắt đầu inference audio với model OmniVoice: speed={speed}, pitch={pitch_shift}", flush=True)
 
     # Debug: Show speed effect on estimated duration
     if speed != 1.0:
         print(f"   📊 Speed {speed} sẽ tạo audio {'ngắn hơn' if speed > 1 else 'dài hơn'} ~{abs(speed-1)*100:.0f}% so với speed=1.0", flush=True)
-    
     for seg in segments:
         if seg["type"] == SEGMENT_TEXT:
 
             spoken = seg["content"]
-            print(f"\n  🔊📢🔊 Omni Generating: {spoken}\n")
+            print(f"\n  🔊📢🔊 Omni Generating: {spoken}\n", flush=True)
 
             audios = omni._inferWithModelOmni(
                 text=spoken.strip(),
@@ -221,9 +223,28 @@ def generate_speech_omni(
 
             # audios là list, lấy phần tử đầu tiên
             getFirstAudio = audios[0]
+
+            # giữ lại speech, bỏ non-speech
+            getFirstAudio = vad_trim(getFirstAudio, omni.sampling_rate, margin_s=0.05)
+            
             audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
                                                   threshold_ms=50,
                                                   silence_threshold_db=-40)
+
+            # ── Pitch shift post-processing (Spotify Pedalboard) ──────────────
+            # Dùng Pedalboard PitchShift — chất lượng cao hơn librosa rất nhiều
+            # pitch_shift: 1.0=giữ nguyên, >1.0=giọng cao, <1.0=giọng trầm
+            # Chuyển ratio → semitones: 12 * log2(ratio)
+            if pitch_shift != 1.0:
+                
+                n_semitones = 12.0 * math.log2(max(0.5, min(2.0, float(pitch_shift))))
+                try:
+                    pitch_board = PB([PitchShift(semitones=n_semitones)])
+                    # Pedalboard cần float32 shape (channels, samples)
+                    audio_2d = audio_np.reshape(1, -1).astype(np.float32)
+                    audio_np = pitch_board(audio_2d, omni.sampling_rate).flatten()
+                except Exception as e:
+                    print(f"⚠️ pitch_shift (pedalboard) failed: {e}")                                      
 
             # [SRT FILE] Tạo timing item cho segment này
             segment_duration = len(audio_np) / omni.sampling_rate

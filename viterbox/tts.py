@@ -14,7 +14,7 @@ from pedalboard import Pedalboard as PB, PitchShift
 from torch.types import Tensor
 from pathlib import Path
 from typing import Optional, Union, List
-
+from general.noise_detect_VAD import vad_trim
 from .models.t3 import T3, T3Config
 from .models.t3.modules.cond_enc import T3Cond
 from .models.s3gen import S3Gen, S3GEN_SR
@@ -307,7 +307,7 @@ class Viterbox(ViterboxExtensionMixin):
         # Fix: trước đây khi dùng cached conds, exaggeration cũ bị giữ nguyên
         if self.conds is not None and hasattr(self.conds.t3, 'emotion_adv'):
             self.conds.t3.emotion_adv = exaggeration * torch.ones(1, 1, 1).to(self.device)
-            print(f"🤖 🎭 emotion_adv = {exaggeration} | cfg={cfg_weight}, temp={temperature}, top_p={top_p}, rep_pen={repetition_penalty}, speed={speed}, pitch={pitch_shift}\n")
+            print(f"🤖 🎭 emotion_adv viterbox = {exaggeration} | cfg={cfg_weight}, temp={temperature}, top_p={top_p}, rep_pen={repetition_penalty}, speed={speed}, pitch={pitch_shift}\n")
 
         # ── Preprocess text ────────────────────────────────────────────────────
         text = clearText(text)
@@ -384,10 +384,13 @@ class Viterbox(ViterboxExtensionMixin):
                         pitch_shift=pitch_shift,
                     )
 
+                    # giữ lại speech, bỏ non-speech
+                    audio_np = vad_trim(audio_np, self.sr, margin_s=0.05)
+
                     # bỏ đi những khoảng lặng không cần thiết cho TTS NORMAL
                     audio_np = fix_silent_and_speed_audio(audio_np, self.sr,
                                                           threshold_ms=50,
-                                                          silence_threshold_db=-50)
+                                                          silence_threshold_db=-40)
                     # [SRT FILE] Tạo timing item cho segment này
                     segment_duration = len(audio_np) / self.sr
                     start_time = current_time

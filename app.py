@@ -348,6 +348,7 @@ with gr.Blocks(
                 reference_audio=str(ref_audio_path),
                 ref_text=ref_text,
                 speed=data[ai_speed],
+                pitch_shift=data[ui_pitch_shift],
             )
             if switched and status:
                 status = f"🔁 Switched to Omni | {status}"
@@ -395,7 +396,7 @@ with gr.Blocks(
 
     # Define separate input sets for each model for better maintainability
     inputs_omni = {
-        model_choice, text_input, language, ref_audio, ai_speed
+        model_choice, text_input, language, ref_audio, ai_speed, ui_pitch_shift
     }
     inputs_viterbox = {
         model_choice, text_input, language, ref_audio, tts_mode,
