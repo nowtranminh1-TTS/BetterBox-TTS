@@ -11,10 +11,6 @@ if TYPE_CHECKING:
     from ...omnivoice.models.omnivoice import OmniVoice
     from ...omnivoice.models.omnivoice import VoiceClonePrompt
 
-from general.general_tool_audio import (
-    addConfigText
-)
-
 # Global cache cho voice_clone_prompt
 _voice_clone_cache: dict[str, Any] = {}
 _CACHE_FILE = Path(__file__).parent / "voice_clone_prompt_cache.json"
@@ -99,6 +95,16 @@ def _set_cached_prompt(cache_key: str, prompt: Any):
     _voice_clone_cache[cache_key] = prompt
     _save_cache_to_disk()
 
+def addConfigTextOmni(text: str) -> str:
+    # Thêm pause tự nhiên đầu và cuối
+
+    # DO NOT CHANGE THIS CONFIG. WE TEST MANY TIMES, THIS IS THE BEST CONFIG FOR MOST CASES. THANK YOU.
+    # change it will cause bugs
+    text = " . " + text + " . "         # best config
+
+    return text
+
+
 
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
@@ -115,10 +121,10 @@ def inferWithModelOmni(
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 
     if len(text.strip().split()) == 1:
-        text = addConfigText(text)
+        text = addConfigTextOmni(text)
         print(f"\n🍂🎧text ĐƠN LẺ trước khi inference TTS {text}\n")
     else:
-        text = addConfigText(text)
+        text = addConfigTextOmni(text)
         print(f"\n🧩🎧🧩text PHRASE trước khi inference TTS {text}\n")
 
     print(f" 📑 Reference text cho voice: {ref_text}\n")
