@@ -54,7 +54,7 @@ def _get_cache_key(ref_audio: str, ref_text: Optional[str]) -> str:
     cache_key = hashlib.md5(key_data.encode('utf-8')).hexdigest()
 
     # Debug log để trace
-    print(f"🔍 Cache key: {cache_key[:8]}... | File: {Path(ref_audio).name} | Size: {file_fingerprint.split(':')[0] if file_fingerprint else '?'}")
+    #print(f"🔍 Cache key: {cache_key[:8]}... | File: {Path(ref_audio).name} | Size: {file_fingerprint.split(':')[0] if file_fingerprint else '?'}")
     return cache_key
 
 
@@ -181,7 +181,7 @@ def inferWithModelOmni(
 
     # Debug chi tiết
     print(f"⚙️ 📂 Đường dẫn đầy đủ: {reference_audio}")
-    print(f"⚙️ 🔑 Cache key đầy đủ: {cache_key}")
+    #print(f"⚙️ 🔑 Cache key đầy đủ: {cache_key}")
     print(f"⚙️ 💾 Có trong cache?: {cached_prompt_data is not None}\n")
 
     voice_clone_prompt = None

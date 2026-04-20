@@ -6,7 +6,12 @@
 - 1. bổ sung tùy chọn model Omnivoice hoặc Viterbox ngoài UI. click chọn là chạy.
 - 2. fix bug UI
 - 3. thêm tính năng *TẠO SRT FILE* - khi generate audio thì file SRT cũng sẽ tự generate luôn
-- Note: hiện model Omnivoice ĐÃ CÓ chức năng ngắt câu theo dấu câu.  
+- 4. có tính năng silero VAD
+
+## một số tính năng mới - cho model Omnivoice
+- 1. đã có tính năng pitch control
+- 2. hiện model Omnivoice ĐÃ CÓ chức năng ngắt câu theo dấu câu. 
+- 3. thay model cũ 'ASR whisper' thành 'ASR Chunkformer' - tốc độ nhanh hơn, chính xác hơn, chuyên cho tiếng việt
 
 ## một số tính năng mới - cho model Viterbox
 - 1. thêm điều chỉnh tốc độ trực tiếp trong model s3gen
@@ -24,6 +29,12 @@
 # 🔧 tải model viterbox TTS và đưa vào folder 'viterbox/modelViterboxLocal' 
 (tránh chép đè file conds.pt - đây là file config để voice mẫu hiện tại chạy chính xác)
 https://huggingface.co/dolly-vn/viterbox/tree/main
+
+
+# 🔧 tải model ASR Chunkformer và đưa vào folder 'OmniVoice/model_ASR_chunkformer_local' 
+(model này dùng để detect text cho âm thanh đầu vào - nếu không có text. lý do cần text cho audio mẫu là vì khi TTS bằng omniVoice sẽ chính xác hơn)
+https://huggingface.co/khanhld/chunkformer-ctc-large-vie/tree/main
+
 
 # 🔧 tải model Omnivoice (bản fine-tune tiếng việt) và đưa vào folder 'OmniVoice/modelOmniLocal' 
 https://huggingface.co/splendor1811/omnivoice-vietnamese/tree/main

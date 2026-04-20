@@ -143,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip loading Whisper ASR model. Reference text auto-transcription"
         " will be unavailable.",
     )
+    parser.add_argument(
+        "--asr-model",
+        default="openai/whisper-large-v3-turbo",
+        help="ASR model path or HuggingFace repo id"
+        " (default: openai/whisper-large-v3-turbo).",
+    )
     return parser
 
 
@@ -523,6 +529,7 @@ def main(argv=None) -> int:
         device_map=device,
         dtype=torch.float16,
         load_asr=not args.no_asr,
+        asr_model_name=args.asr_model,
     )
     print("Model loaded.")
 

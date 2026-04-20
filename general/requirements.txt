@@ -23,3 +23,8 @@ omegaconf==2.3.0
 pedalboard
 pydub
 datasets>=2.14.0
+jiwer>=3.0.0
+colorama>=0.4.0
+tqdm>=4.65.0
+pandas>=2.0.0
+pyyaml>=6.0

@@ -38,9 +38,9 @@ from typing import Any, List, Optional, Union
 
 import numpy as np
 import torch
-import torchaudio
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 from torch.nn.attention.flex_attention import create_block_mask
 from transformers import (
     AutoFeatureExtractor,
@@ -182,6 +182,14 @@ class OmniVoiceConfig(PretrainedConfig):
         self.audio_codebook_weights = audio_codebook_weights
 
 
+def _resolve_model_path(name_or_path: str) -> str:
+    if os.path.isdir(name_or_path):
+        return name_or_path
+    from huggingface_hub import snapshot_download
+
+    return snapshot_download(name_or_path)
+
+
 class OmniVoice(PreTrainedModel):
     _supports_flex_attn = True
     _supports_flash_attn_2 = True
@@ -225,44 +233,36 @@ class OmniVoice(PreTrainedModel):
         self.audio_tokenizer = None
         self.duration_estimator = None
         self.sampling_rate = None
-        self._asr_pipe = None
+        self._asr = None
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         train_mode = kwargs.pop("train", False)
         load_asr = kwargs.pop("load_asr", False)
-        asr_model_name = kwargs.pop("asr_model_name", "openai/whisper-large-v3-turbo")
+        asr_model_path = kwargs.pop("asr_model_path", None)
 
         # Suppress noisy INFO logs from transformers/huggingface_hub during loading
         _prev_disable = logging.root.manager.disable
         logging.disable(logging.INFO)
 
         try:
-            model = super().from_pretrained(
-                pretrained_model_name_or_path, *args, **kwargs
-            )
+            # Resolve to local path first; download only if not already cached
+            resolved_path = _resolve_model_path(pretrained_model_name_or_path)
+
+            model = super().from_pretrained(resolved_path, *args, **kwargs)
 
             if not train_mode:
-                # Resolve local path for audio tokenizer subdirectory
-                if os.path.isdir(pretrained_model_name_or_path):
-                    resolved_path = pretrained_model_name_or_path
-                else:
-                    from huggingface_hub import snapshot_download
-
-                    resolved_path = snapshot_download(pretrained_model_name_or_path)
-
-                model.text_tokenizer = AutoTokenizer.from_pretrained(
-                    pretrained_model_name_or_path
-                )
+                model.text_tokenizer = AutoTokenizer.from_pretrained(resolved_path)
 
                 audio_tokenizer_path = os.path.join(resolved_path, "audio_tokenizer")
 
                 if not os.path.isdir(audio_tokenizer_path):
-                    # Fallback to the HuggingFace Hub path of transformers'
-                    # HiggsAudioV2Tokenizer if the local subdirectory doesn't exist.
-                    audio_tokenizer_path = "eustlb/higgs-audio-v2-tokenizer"
+                    audio_tokenizer_path = _resolve_model_path(
+                        "eustlb/higgs-audio-v2-tokenizer"
+                    )
 
-                # higgs-audio-v2-tokenizer does not support MPS (output channels > 65536)
+                # higgs-audio-v2-tokenizer does not support MPS
+                # (output channels > 65536)
                 tokenizer_device = (
                     "cpu" if str(model.device).startswith("mps") else model.device
                 )
@@ -278,35 +278,27 @@ class OmniVoice(PreTrainedModel):
                 model.duration_estimator = RuleDurationEstimator()
 
                 if load_asr:
-                    model.load_asr_model(model_name=asr_model_name)
+                    model.load_asr_model(model_path=asr_model_path)
         finally:
             logging.disable(_prev_disable)
 
         return model
 
     # -------------------------------------------------------------------
-    # ASR support (optional, for auto-transcription)
+    # ASR support (optional, for auto-transcription) - Chunkformer
     # -------------------------------------------------------------------
 
-    def load_asr_model(self, model_name: str = "openai/whisper-large-v3-turbo"):
-        """Load a Whisper ASR model for reference audio transcription.
+    def load_asr_model(self, model_path: Optional[str] = None):
+        """Load a Chunkformer ASR model for reference audio transcription.
 
         Args:
-            model_name: HuggingFace model name for the Whisper model.
+            model_path: Local path to the Chunkformer model directory.
+                       If None, uses the default model in project root.
         """
-        from transformers import pipeline as hf_pipeline
-
-        logger.info("Loading ASR model %s ...", model_name)
-        asr_dtype = (
-            torch.float16 if str(self.device).startswith("cuda") else torch.float32
-        )
-        self._asr_pipe = hf_pipeline(
-            "automatic-speech-recognition",
-            model=model_name,
-            dtype=asr_dtype,
-            device_map=self.device,
-        )
-        logger.info("ASR model loaded on %s.", self.device)
+        from omnivoice.models.asr_chunkformer import ASRChunkformer
+        
+        self._asr = ASRChunkformer(device=self.device)
+        self._asr.load_model(model_path)
 
     @torch.inference_mode()
     def transcribe(
@@ -314,50 +306,23 @@ class OmniVoice(PreTrainedModel):
         audio: Union[str, tuple],
         language: Optional[str] = None,
     ) -> str:
-        """Transcribe audio using the loaded Whisper ASR model.
+        """Transcribe audio using the loaded Chunkformer ASR model.
 
         Args:
             audio: File path or ``(waveform, sample_rate)`` tuple.
                 Waveform can be a numpy array or torch.Tensor of shape
                 ``(1, T)`` or ``(T,)``.
-            language: Language code (e.g., 'vi', 'en') for multilingual Whisper.
-                If None, auto-detect language.
+            language: Language code (kept for API compatibility, ignored
+                     since Chunkformer Vietnamese model is monolingual).
 
         Returns:
             Transcribed text.
         """
-        if self._asr_pipe is None:
+        if self._asr is None:
             raise RuntimeError(
                 "ASR model is not loaded. Call model.load_asr_model() first."
             )
-
-        # Generate kwargs theo API mới của transformers để tránh warning
-        generate_kwargs = {"task": "transcribe"}
-        if language:
-            generate_kwargs["language"] = language
-        
-        # Lazy import datasets để tránh crash nếu thư viện không được cài
-        try:
-            from datasets import Dataset, Audio as DatasetAudio
-        except ImportError:
-            raise RuntimeError(
-                "Thư viện 'datasets' chưa được cài. "
-                "Vui lòng chạy: pip install datasets"
-            )
-        
-        if isinstance(audio, str):
-            # Dùng Dataset cho file path
-            dataset = Dataset.from_dict({"audio": [audio]}).cast_column("audio", DatasetAudio())
-        else:
-            waveform, sr = audio
-            if isinstance(waveform, torch.Tensor):
-                waveform = waveform.cpu().numpy()
-            waveform = np.squeeze(waveform)  # (1, T) or (T,) → (T,)
-            # Dùng Dataset cho waveform array
-            dataset = Dataset.from_dict({"audio": [{"array": waveform, "sampling_rate": sr}]})
-        
-        result = self._asr_pipe(dataset, generate_kwargs=generate_kwargs)
-        return result[0]["text"].strip()
+        return self._asr.transcribe(audio, language)
 
     def get_input_embeddings(self):
         return self.llm.get_input_embeddings()
@@ -683,12 +648,16 @@ class OmniVoice(PreTrainedModel):
 
         # Auto-transcribe if ref_text not provided
         if ref_text is None:
-            if self._asr_pipe is None:
+            if self._asr is None or not self._asr.is_loaded():
                 logger.info("ASR model not loaded yet, loading on-the-fly ...")
+                print(f"🎯 [ASR On-the-fly] ref_text=None, cần transcribe audio {ref_wav.shape[-1]/self.sampling_rate:.2f}s")
+                print(f"   → Đang load Chunkformer ASR model...")
                 self.load_asr_model()
-            # Truyền language để tránh warning và transcribe chính xác hơn
-            ref_text = self.transcribe((ref_wav, self.sampling_rate), language=language)
+                print(f"   → ASR model đã sẵn sàng, bắt đầu transcribe...")
+            # Chunkformer Vietnamese model không cần language parameter
+            ref_text = self.transcribe((ref_wav, self.sampling_rate))
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
+            print(f"   ✅ Voice cloning sẽ dùng text: '{ref_text[:60]}{'...' if len(ref_text) > 60 else ''}'")
 
         chunk_size = self.audio_tokenizer.config.hop_length
         clip_size = int(ref_wav.shape[-1] % chunk_size)

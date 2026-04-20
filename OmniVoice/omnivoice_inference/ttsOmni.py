@@ -138,9 +138,11 @@ class Omni:
             model = cast(Any, omni_voice_cls.from_pretrained(
                 self.model_path,
                 dtype=dtype,
+                load_asr=False,  # On-the-fly: load ASR khi cần transcribe
             ))
             model = model.to(self.device)
             self.model = model
+            print("📝 ASR is loaded on-the-fly for transcription purposes.")
         return cast(Any, self.model)
 
     def load(self):

@@ -40,7 +40,7 @@ from omnivoice.data.batching import PackingIterableDataset
 from omnivoice.data.collator import PackingDataCollator
 from omnivoice.data.dataset import WebDatasetReader, prepare_data_manifests_from_json
 from omnivoice.data.processor import OmniVoiceSampleProcessor
-from omnivoice.models.omnivoice import OmniVoice, OmniVoiceConfig
+from omnivoice.models.omnivoice import OmniVoice, OmniVoiceConfig, _resolve_model_path
 from omnivoice.training.config import TrainingConfig
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ def build_model_and_tokenizer(
         if config.init_from_checkpoint
         else config.llm_name_or_path
     )
+    tokenizer_path = _resolve_model_path(tokenizer_path)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -85,7 +86,8 @@ def build_model_and_tokenizer(
             train=True,
         )
     else:
-        llm_config = AutoConfig.from_pretrained(config.llm_name_or_path)
+        resolved_llm = _resolve_model_path(config.llm_name_or_path)
+        llm_config = AutoConfig.from_pretrained(resolved_llm)
 
         ov_config = OmniVoiceConfig(
             audio_vocab_size=config.audio_vocab_size,
@@ -99,7 +101,7 @@ def build_model_and_tokenizer(
         hf_logging.set_verbosity_error()  # suppress expected lm_head.weight warnings
 
         llm = AutoModel.from_pretrained(
-            config.llm_name_or_path,
+            resolved_llm,
             attn_implementation="flex_attention",
             dtype=torch.float32,
         )

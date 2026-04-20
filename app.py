@@ -335,7 +335,7 @@ with gr.Blocks(
                 except Exception:
                     ref_text = None
 
-            print(f"\n📁 wavs_dir: {wavs_dir}")
+            #print(f"\n📁 wavs_dir: {wavs_dir}")
             print(f"📝 ref_text_path: {ref_text_path}")
             print(f"🎵 audio path (temp): {ref_audio_temp_path}")
             print(f"🎵 audio path (wavs): {ref_audio_path}")
