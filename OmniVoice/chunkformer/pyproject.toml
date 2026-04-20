@@ -1,0 +1,163 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chunkformer"
+version = "1.2.2"
+authors = [
+    {name = "khanld", email = "khanhld218@gmail.com"},
+]
+description = "ChunkFormer: Masked Chunking Conformer For Long-Form Speech Transcription"
+readme = "README.md"
+license = {text = "CC-BY-4.0"}
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "torch>=2.5.1",
+    "torchaudio>=2.5.1",
+    "transformers>=4.20.0",
+    "PyYAML>=5.4.0",
+    "pandas>=1.3.0",
+    "tqdm>=4.62.0",
+    "jiwer>=2.3.0",
+    "colorama>=0.4.4",
+    "pydub>=0.25.0",
+    "huggingface_hub>=0.10.0",
+    "Pillow",
+    "sentencepiece",
+    "tensorboard",
+    "tensorboardX",
+    "textgrid",
+    "deepspeed>=0.14.0",
+    "librosa",
+    "langid",
+]
+keywords = [
+    "speech-recognition",
+    "asr",
+    "chunkformer",
+    "transformer",
+    "conformer",
+    "pytorch",
+    "long-form-audio",
+    "machine-learning",
+    "deep-learning",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0.0",
+    "black==25.9.0",
+    "flake8==6.0.0",
+    "flake8-pyproject>=1.2.0",
+    "isort==5.12.0",
+    "mypy==1.5.1",
+    "pre-commit>=3.0.0",
+    "types-PyYAML>=6.0.0",
+    "autopep8>=2.0.0",
+    "autoflake>=2.0.0",
+]
+
+[project.scripts]
+chunkformer-decode = "chunkformer.chunkformer_model:main"
+
+[project.urls]
+Homepage = "https://github.com/khanld/chunkformer"
+Documentation = "https://github.com/khanld/chunkformer/blob/main/README.md"
+Repository = "https://github.com/khanld/chunkformer"
+"Bug Reports" = "https://github.com/khanld/chunkformer/issues"
+Paper = "https://github.com/khanld/chunkformer/blob/main/docs/paper.pdf"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chunkformer*"]
+exclude = ["tests*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "performance: marks tests as performance tests",
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503", "B008", "C416", "EXE001", "E741", "E731"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".env"
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+exclude = [
+    "tests/",
+    "setup.py"
+]
+
+[[tool.mypy.overrides]]
+module = "streamlit.*"
+ignore_errors = true
+
+[tool.autopep8]
+max-line-length = 100
+aggressive = 2
+exclude = ".git,__pycache__,build,dist,.eggs,*.egg-info,.venv,.env"
+
+[tool.autoflake]
+remove-all-unused-imports = true
+remove-unused-variables = true
+remove-duplicate-keys = true
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".env"
+]
