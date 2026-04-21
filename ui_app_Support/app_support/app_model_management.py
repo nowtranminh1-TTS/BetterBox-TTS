@@ -45,7 +45,7 @@ def get_omni_model():
         print("🚀 Loading OmniVoice...")
         print("=" * 50)
         OMNI_MODEL = Omni()
-        OMNI_MODEL.load()
+        OMNI_MODEL.loadOmniFromUI()
         print("✅ OmniVoice loaded!")
         print("=" * 50)
     return OMNI_MODEL

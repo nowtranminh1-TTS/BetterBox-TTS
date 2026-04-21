@@ -238,8 +238,6 @@ class OmniVoice(PreTrainedModel):
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         train_mode = kwargs.pop("train", False)
-        load_asr = kwargs.pop("load_asr", False)
-        asr_model_path = kwargs.pop("asr_model_path", None)
 
         # Suppress noisy INFO logs from transformers/huggingface_hub during loading
         _prev_disable = logging.root.manager.disable
@@ -276,9 +274,6 @@ class OmniVoice(PreTrainedModel):
                 model.sampling_rate = model.feature_extractor.sampling_rate
 
                 model.duration_estimator = RuleDurationEstimator()
-
-                if load_asr:
-                    model.load_asr_model(model_path=asr_model_path)
         finally:
             logging.disable(_prev_disable)
 
@@ -301,7 +296,7 @@ class OmniVoice(PreTrainedModel):
         self._asr.load_model(model_path)
 
     @torch.inference_mode()
-    def transcribe(
+    def transcribe_local(
         self,
         audio: Union[str, tuple],
         language: Optional[str] = None,
@@ -590,6 +585,7 @@ class OmniVoice(PreTrainedModel):
         Returns:
             A :class:`VoiceClonePrompt` that can be passed to :meth:`generate`.
         """
+
         if self.audio_tokenizer is None:
             raise RuntimeError(
                 "Audio tokenizer is not loaded. Make sure you loaded the model "
@@ -655,7 +651,7 @@ class OmniVoice(PreTrainedModel):
                 self.load_asr_model()
                 print(f"   → ASR model đã sẵn sàng, bắt đầu transcribe...")
             # Chunkformer Vietnamese model không cần language parameter
-            ref_text = self.transcribe((ref_wav, self.sampling_rate))
+            ref_text = self.transcribe_local((ref_wav, self.sampling_rate))
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
             print(f"   ✅ Voice cloning sẽ dùng text: '{ref_text[:60]}{'...' if len(ref_text) > 60 else ''}'")
 

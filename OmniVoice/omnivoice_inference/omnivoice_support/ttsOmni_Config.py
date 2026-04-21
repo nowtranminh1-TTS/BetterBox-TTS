@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import torch
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, cast
 
@@ -93,7 +94,72 @@ def _set_cached_prompt(cache_key: str, prompt: Any):
     """Lưu prompt vào cache."""
     global _voice_clone_cache
     _voice_clone_cache[cache_key] = prompt
+
+    print(f"💾 Lưu prompt vào cache. \n")
     _save_cache_to_disk()
+
+
+def get_voice_clone_prompt(
+    reference_audio: str,
+    ref_text: Optional[str],
+    model: "OmniVoice",
+    preprocess_prompt: Optional[bool] = True,
+    language: Optional[str] = "vi",
+) -> "VoiceClonePrompt":
+    """Get or create voice clone prompt with caching support.
+
+    Args:
+        reference_audio: Path to reference audio file.
+        ref_text: Transcript of reference audio (None to auto-transcribe).
+        model: OmniVoice model instance.
+        preprocess_prompt: Whether to preprocess reference audio.
+        language: Language code for transcription.
+
+    Returns:
+        VoiceClonePrompt object (cached or newly created).
+    """
+
+    # Check cache
+    cache_key = _get_cache_key(reference_audio, ref_text)
+    cached_prompt_data = _get_cached_prompt(cache_key)
+
+    print(f"⚙️ 📂 Đường dẫn đầy đủ: {reference_audio}")
+    print(f"⚙️ 💾 Có trong cache?: {cached_prompt_data is not None}\n")
+
+    # Try to use cached data
+    if cached_prompt_data is not None:
+        try:
+            from omnivoice.models.omnivoice import VoiceClonePrompt
+            ref_audio_tokens = torch.tensor(cached_prompt_data['ref_audio_tokens'], dtype=torch.long)
+            voice_clone_prompt = VoiceClonePrompt(
+                ref_audio_tokens=ref_audio_tokens,
+                ref_text=cached_prompt_data['ref_text'],
+                ref_rms=cached_prompt_data['ref_rms'],
+            )
+            print(f"♻️  Sử dụng cached voice_clone_prompt cho: {Path(reference_audio).name}\n")
+            return voice_clone_prompt
+        except Exception as e:
+            print(f"⚠️ Cache corrupted, recreate: {e}")
+
+    # Create new prompt
+    print(f"🆕 🔊 ⿻ Tạo voice_clone_prompt mới cho: {Path(reference_audio).name}")
+    voice_clone_prompt = model.create_voice_clone_prompt(
+        ref_audio=reference_audio,
+        ref_text=ref_text,
+        preprocess_prompt=preprocess_prompt if preprocess_prompt is not None else True,
+        language=language,
+    )
+
+    # Save to cache
+    cache_data = {
+        'ref_audio_tokens': voice_clone_prompt.ref_audio_tokens.cpu().tolist(),
+        'ref_text': voice_clone_prompt.ref_text,
+        'ref_rms': voice_clone_prompt.ref_rms,
+    }
+    _set_cached_prompt(cache_key, cache_data)
+
+    return voice_clone_prompt
+
 
 def addConfigTextOmni(text: str) -> str:
     # Thêm pause tự nhiên đầu và cuối
@@ -119,6 +185,11 @@ def inferWithModelOmni(
    # duration: Optional[float] = None,  # Thêm để kiểm soát tốc độ đọc cố định
 ):
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
+
+    # nếu language là None, hoặc language với lowercase là "vi"
+    # thì language đổi thành "vietnamese". còn lại thì language giữ nguyên
+    if language is None or language.lower() == "vi":
+        language = "vietnamese"
 
     if len(text.strip().split()) == 1:
         text = addConfigTextOmni(text)
@@ -169,55 +240,22 @@ def inferWithModelOmni(
     # nếu text ngắn (< 30-60 giây), nên để audio_chunk_duration = 0 để tắt chunking hoàn toàn.
     audio_chunk_duration: Optional[float] = 0.0  # tối thiểu: 5.0, tối đa: 30.0 | khuyến nghị chính xác: 18-24
 
+
     # audio_chunk_threshold: tăng cao để HẠN CHẾ chunking (ít đứt mạch, thường chính xác hơn cho câu vừa/ngắn).
     audio_chunk_threshold: Optional[float] = 60.0  # tối thiểu: 10.0, tối đa: 60.0 | khuyến nghị chính xác: 45-60
 
+
     model: OmniVoice = self.loadModelOmni()  # type: ignore[assignment]
+    # torch.compile + CUDA optimizations đã được chuyển vào loadModelOmni() — chỉ chạy 1 lần duy nhất khi load model
 
-    # --- Voice Clone Prompt Caching ---
-    # Tạo cache key từ ref_audio và ref_text
-    cache_key = _get_cache_key(reference_audio, ref_text)
-    cached_prompt_data = _get_cached_prompt(cache_key)
+    voice_clone_prompt = get_voice_clone_prompt(
+        reference_audio=reference_audio,
+        ref_text=ref_text,
+        model=model,
+        preprocess_prompt=preprocess_prompt,
+        language=language,
+    )
 
-    # Debug chi tiết
-    print(f"⚙️ 📂 Đường dẫn đầy đủ: {reference_audio}")
-    #print(f"⚙️ 🔑 Cache key đầy đủ: {cache_key}")
-    print(f"⚙️ 💾 Có trong cache?: {cached_prompt_data is not None}\n")
-
-    voice_clone_prompt = None
-    if cached_prompt_data is not None:
-        # Reconstruct VoiceClonePrompt từ cache
-        try:
-            import torch
-            from ...omnivoice.models.omnivoice import VoiceClonePrompt
-            ref_audio_tokens = torch.tensor(cached_prompt_data['ref_audio_tokens'], dtype=torch.long)
-            voice_clone_prompt = VoiceClonePrompt(
-                ref_audio_tokens=ref_audio_tokens,
-                ref_text=cached_prompt_data['ref_text'],
-                ref_rms=cached_prompt_data['ref_rms'],
-            )
-            print(f"♻️  Sử dụng cached voice_clone_prompt cho: {Path(reference_audio).name}\n")
-        except Exception as e:
-            print(f"⚠️ Cache corrupted, recreate: {e}")
-            voice_clone_prompt = None
-
-    if voice_clone_prompt is None:
-        # Tạo mới và cache lại
-        print(f"🆕 🔊 ⿻ Tạo voice_clone_prompt mới cho: {Path(reference_audio).name}")
-        voice_clone_prompt = model.create_voice_clone_prompt(
-            ref_audio=reference_audio,
-            ref_text=ref_text,
-            preprocess_prompt=preprocess_prompt if preprocess_prompt is not None else True,
-            language=language,
-        )
-        # Lưu vào cache (convert tensor sang list để JSON serializable)
-        cache_data = {
-            'ref_audio_tokens': voice_clone_prompt.ref_audio_tokens.cpu().tolist(),
-            'ref_text': voice_clone_prompt.ref_text,
-            'ref_rms': voice_clone_prompt.ref_rms,
-        }
-        _set_cached_prompt(cache_key, cache_data)
-    # --- End Caching ---
 
     generate_kwargs = {
         "text": text,

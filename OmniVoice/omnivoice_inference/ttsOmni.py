@@ -138,14 +138,36 @@ class Omni:
             model = cast(Any, omni_voice_cls.from_pretrained(
                 self.model_path,
                 dtype=dtype,
-                load_asr=False,  # On-the-fly: load ASR khi cần transcribe
             ))
             model = model.to(self.device)
+
+            # ── CUDA & torch.compile optimizations (chỉ chạy 1 lần khi load model) ──
+            if torch.cuda.is_available():
+                # TF32 cho matmul — nhanh hơn ~3x, chất lượng audio gần như không đổi
+                torch.set_float32_matmul_precision("high")
+                torch.backends.cuda.matmul.allow_tf32 = True
+                torch.backends.cudnn.allow_tf32 = True
+                # Auto-tune convolution kernels cho kích thước input ổn định
+                torch.backends.cudnn.benchmark = True
+                print("⚡ CUDA optimizations applied (TF32, cuDNN benchmark) \n")
+
+            # Compile LLM backbone — giảm Python overhead, tăng tốc inference
+            # ⚠️ torch.compile cần Triton (chỉ hỗ trợ Linux). Windows sẽ bỏ qua.
+            import platform
+            if platform.system() != "Windows":
+                try:
+                    model.llm = torch.compile(model.llm, mode="reduce-overhead", dynamic=True)
+                    print("⚡ torch.compile applied to LLM backbone (reduce-overhead)\n")
+                except Exception as e:
+                    print(f"⚠️ torch.compile failed (sẽ dùng eager mode): {e}\n")
+            else:
+                print("ℹ️ torch.compile bỏ qua trên Windows (Triton không hỗ trợ)\n")
+
             self.model = model
-            print("📝 ASR is loaded on-the-fly for transcription purposes.")
+            print("📝 ASR chỉ load khi cần xài\n")
         return cast(Any, self.model)
 
-    def load(self):
+    def loadOmniFromUI(self):
         return self.loadModelOmni()
 
     _inferWithModelOmni = inferWithModelOmni
@@ -231,7 +253,7 @@ def generate_speech_omni(
             
             audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
                                                   threshold_ms=50,
-                                                  silence_threshold_db=-40)
+                                                  silence_threshold_db=-60)
 
             # ── Pitch shift post-processing (Spotify Pedalboard) ──────────────
             # Dùng Pedalboard PitchShift — chất lượng cao hơn librosa rất nhiều

@@ -160,15 +160,6 @@ class Viterbox(ViterboxExtensionMixin):
         cfg_weight: float, temperature: float, top_p: float, repetition_penalty: float,
     ) -> Tensor:
 
-        force_fp32: bool = True
-        use_autocast = (not force_fp32) and (self.device in ["cuda", "mps"])
-        if self.device == "cuda":
-            device_type = "cuda"
-        elif self.device == "mps":
-            device_type = "mps"
-        else:
-            device_type = None
-
         text_tokens = self.tokenizer.text_to_tokens(text, language_id=language).to(self.device)
 
         # CFG: duplicate batch 2 nhánh cond/uncond
@@ -185,21 +176,16 @@ class Viterbox(ViterboxExtensionMixin):
         input_token_count   = text_tokens.shape[-1]
         adaptive_max_tokens = getNumberTokenText(text, input_token_count)
 
-        if use_autocast and device_type is not None:
-            autocast_ctx = torch.autocast(device_type=device_type, dtype=torch.float16)
-        else:
-            autocast_ctx = torch.no_grad()
-
-        with autocast_ctx:
-            speech_tokens = self.t3.inference(
-                t3_cond=self.conds.t3,
-                text_tokens=text_tokens,
-                max_new_tokens=adaptive_max_tokens,
-                temperature=temperature,
-                cfg_weight=cfg_weight,
-                repetition_penalty=repetition_penalty,
-                top_p=top_p,
-            )
+        # Caller (_generate_single) đã bọc torch.inference_mode() — không cần thêm context nào
+        speech_tokens = self.t3.inference(
+            t3_cond=self.conds.t3,
+            text_tokens=text_tokens,
+            max_new_tokens=adaptive_max_tokens,
+            temperature=temperature,
+            cfg_weight=cfg_weight,
+            repetition_penalty=repetition_penalty,
+            top_p=top_p,
+        )
 
         speech_tokens = speech_tokens[0]
         speech_tokens = drop_invalid_tokens(speech_tokens)
@@ -390,7 +376,7 @@ class Viterbox(ViterboxExtensionMixin):
                     # bỏ đi những khoảng lặng không cần thiết cho TTS NORMAL
                     audio_np = fix_silent_and_speed_audio(audio_np, self.sr,
                                                           threshold_ms=50,
-                                                          silence_threshold_db=-40)
+                                                          silence_threshold_db=-60)
                     # [SRT FILE] Tạo timing item cho segment này
                     segment_duration = len(audio_np) / self.sr
                     start_time = current_time

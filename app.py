@@ -178,7 +178,7 @@ with gr.Blocks(
         with gr.Column(scale=1, elem_classes=["card"]):
             gr.HTML('<div class="section-title">🎤 Reference Voice</div>')
             gr.HTML('''<div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); border-left: 4px solid #4fc3f7; border-radius: 8px; padding: 12px 16px; margin: 8px 0; font-size: 13px; color: #ffffff; line-height: 1.5;">
-                <span style="color: #4fc3f7; font-weight: bold;">💡 Tip:</span> Để OmniVoice cho kết quả chính xác nhất, hãy đặt file <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #ffffff;">.wav</code> và <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #fff;">.txt</code> cùng tên trong folder wavs/
+                <span style="color: #4fc3f7; font-weight: bold;">💡 Tip:</span> Để OmniVoice cho kết quả chính xác nhất, hãy đặt file <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #ffffff;">.wav</code> và <code style="background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; color: #fff;">.txt</code> cùng tên trong folder wavs/, nếu không có file text kèm theo, app sẽ sử dung thêm model chunkformer để lấy text từ audio đầu vào -> VRAM sẽ tăng thêm từ 1-2GB
             </div>''')      
             wav_files = list_voices()
             default_voice = get_default_voice(wav_files)

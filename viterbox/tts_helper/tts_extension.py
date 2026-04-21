@@ -103,6 +103,14 @@ class ViterboxExtensionMixin:
 
         model = cls(t3, s3gen, ve, tokenizer, device, emotional_profile)
 
+        # ── CUDA optimizations (chỉ chạy 1 lần khi load model) ──
+        if torch.cuda.is_available():
+            torch.set_float32_matmul_precision("high")
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cudnn.benchmark = True
+            print("⚡ CUDA optimizations applied (TF32, cuDNN benchmark)\n")
+
         # Load default conditioning nếu có sẵn
         conds_path = ckpt_dir / "conds.pt"
         if conds_path.exists():

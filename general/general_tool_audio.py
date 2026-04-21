@@ -153,7 +153,7 @@ def fix_silent_and_speed_audio(
     audio: np.ndarray,
     sr: int, # input framerate
     threshold_ms: int = 50,
-    silence_threshold_db: float = -40.0  # ngưỡng dB để xác định silent. càng cao càng là có tiếng nói. VD: -18 dB chắc chắn là người nói
+    silence_threshold_db: float = -60.0  # ngưỡng dB để xác định silent. càng cao càng là có tiếng nói. VD: -18 dB chắc chắn là người nói
 ) -> np.ndarray:
     if len(audio) == 0:
         return audio
