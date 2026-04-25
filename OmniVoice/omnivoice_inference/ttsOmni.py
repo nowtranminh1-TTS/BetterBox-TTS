@@ -41,11 +41,16 @@ import torch
 try:
     from .omnivoice_support.ttsOmni_Config import inferWithModelOmni
 except ImportError:
-    from OmniVoice.omnivoice_inference.omnivoice_support.ttsOmni_Config import (
+    from OmniVoice.omnivoice_inference.omnivoice_support.ttsOmni_Config import (  # type: ignore
         inferWithModelOmni,
     )
 
-from general.general_tool_audio import (
+# Thêm thư mục gốc của project vào sys.path để import được module 'general'
+_project_root = Path(__file__).resolve().parents[2]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from general.general_tool_audio import (  # type: ignore
     SEGMENT_TEXT,
     get_reference_sound,
     segment_text,
@@ -54,7 +59,7 @@ from general.general_tool_audio import (
     clearText,
     create_srt_file
 )
-from general.noise_detect_VAD import vad_trim
+from general.noise_detect_VAD import vad_trim  # type: ignore
 
 def _import_omnivoice_class():
     try:
@@ -141,28 +146,6 @@ class Omni:
             ))
             model = model.to(self.device)
 
-            # ── CUDA & torch.compile optimizations (chỉ chạy 1 lần khi load model) ──
-            if torch.cuda.is_available():
-                # TF32 cho matmul — nhanh hơn ~3x, chất lượng audio gần như không đổi
-                torch.set_float32_matmul_precision("high")
-                torch.backends.cuda.matmul.allow_tf32 = True
-                torch.backends.cudnn.allow_tf32 = True
-                # Auto-tune convolution kernels cho kích thước input ổn định
-                torch.backends.cudnn.benchmark = True
-                print("⚡ CUDA optimizations applied (TF32, cuDNN benchmark) \n")
-
-            # Compile LLM backbone — giảm Python overhead, tăng tốc inference
-            # ⚠️ torch.compile cần Triton (chỉ hỗ trợ Linux). Windows sẽ bỏ qua.
-            import platform
-            if platform.system() != "Windows":
-                try:
-                    model.llm = torch.compile(model.llm, mode="reduce-overhead", dynamic=True)
-                    print("⚡ torch.compile applied to LLM backbone (reduce-overhead)\n")
-                except Exception as e:
-                    print(f"⚠️ torch.compile failed (sẽ dùng eager mode): {e}\n")
-            else:
-                print("ℹ️ torch.compile bỏ qua trên Windows (Triton không hỗ trợ)\n")
-
             self.model = model
             print("📝 ASR chỉ load khi cần xài\n")
         return cast(Any, self.model)
@@ -217,12 +200,12 @@ def generate_speech_omni(
             print(f"   [{idx+1}] ⏸  '{seg['content']}' → {seg['pause_ms']} ms")
 
     # ── Build audio ────────────────────────────────────────────────────────
-    audio_pieces: List[np.ndarray] = []
-    join_before:  List[str]        = []
+    audio_pieces: list[np.ndarray] = []
+    join_before:  list[str]        = []
     pending_join: str              = "sentence"
 
     # ── Create SRT file ─────────────────────────────────────────────────────
-    arrSrt: List[dict]      = []  # để làm file SRT, List chứa {startTime, endTime, text}
+    arrSrt: list[dict]      = []  # để làm file SRT, List chứa {startTime, endTime, text}
     current_time: float      = 0.0  # Thời gian tích lũy (giây)
 
 # ----------------------------READY FOR INFERENCE TTS--------------------------
@@ -253,7 +236,7 @@ def generate_speech_omni(
             
             audio_np = fix_silent_and_speed_audio(getFirstAudio, omni.sampling_rate,
                                                   threshold_ms=50,
-                                                  silence_threshold_db=-60)
+                                                  silence_threshold_db=-45)
 
             # ── Pitch shift post-processing (Spotify Pedalboard) ──────────────
             # Dùng Pedalboard PitchShift — chất lượng cao hơn librosa rất nhiều

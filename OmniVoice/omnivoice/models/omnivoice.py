@@ -75,6 +75,50 @@ from omnivoice.utils.voice_design import (
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# One-time CUDA global optimizations
+# ---------------------------------------------------------------------------
+
+# Guard: chỉ set CUDA flags đúng 1 lần trong toàn bộ vòng đời process,
+# tránh gọi lại mỗi khi load model hoặc mỗi lần TTS.
+_CUDA_OPTIMIZED: bool = False
+
+
+def _apply_cuda_global_flags() -> None:
+    """Apply global CUDA/cuDNN performance flags (called once per process).
+
+    - TF32 matmul — ~3x faster, audio quality virtually unchanged.
+    - cuDNN TF32 — same benefit for conv layers.
+    - cuDNN benchmark — auto-selects fastest conv kernel for stable input sizes.
+    - torch.set_float32_matmul_precision("high") — enables TF32 path globally.
+    - Flash Attention 2 — tăng tốc attention trên Ampere+ (RTX 30xx/40xx), Windows-safe.
+    - FP16 reduced precision matmul — tối ưu thêm cho Tensor Core trên RTX 4070.
+    """
+    global _CUDA_OPTIMIZED
+    if _CUDA_OPTIMIZED:
+        return  # Đã set rồi, bỏ qua
+    if torch.cuda.is_available():
+        # TF32 cho matmul — nhanh hơn ~3x, chất lượng audio gần như không đổi
+        torch.set_float32_matmul_precision("high")
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        # FP16 reduced precision accumulation — tận dụng Tensor Core trên RTX 4070
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+        # Auto-tune convolution kernels cho kích thước input ổn định
+        torch.backends.cudnn.benchmark = True
+        # Flash Attention 2 — Windows-safe, không cần Triton
+        # RTX 4070 (Ada Lovelace SM 8.9) hỗ trợ đầy đủ
+        try:
+            torch.backends.cuda.enable_flash_sdp(True)        # Flash Attention 2 (nhanh nhất)
+            torch.backends.cuda.enable_mem_efficient_sdp(True) # Fallback tiết kiệm VRAM
+            torch.backends.cuda.enable_math_sdp(False)         # Tắt slow math path
+            print("⚡ CUDA global flags: TF32 + cuDNN benchmark + Flash Attention 2 enabled (one-time)\n")
+        except Exception:
+            # PyTorch cũ hơn không có enable_flash_sdp
+            print("⚡ CUDA global flags: TF32 + cuDNN benchmark enabled (one-time)\n")
+    _CUDA_OPTIMIZED = True
+
+
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -182,11 +226,19 @@ class OmniVoiceConfig(PretrainedConfig):
         self.audio_codebook_weights = audio_codebook_weights
 
 
-def _resolve_model_path(name_or_path: str) -> str:
-    if os.path.isdir(name_or_path):
-        return name_or_path
-    from huggingface_hub import snapshot_download
+def _resolve_higgs_path() -> str:
+    # Dynamically find the local path 'OmniVoice/model_higgs_audio_v2_tokenizer_local'
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    local_path = os.path.abspath(os.path.join(current_dir, "..", "..", "model_higgs_audio_v2_tokenizer_local"))
+    
+    if os.path.isdir(local_path):
+        print(f"[model Higg path] FOUND local path {local_path}\n")
+        return local_path
 
+    # Nếu không thấy folder local, thì mới fallback tải từ hub
+    name_or_path = "eustlb/higgs-audio-v2-tokenizer"
+    from huggingface_hub import snapshot_download
+    print(f"[model Higg path] Download from hub {name_or_path}\n")
     return snapshot_download(name_or_path)
 
 
@@ -245,7 +297,13 @@ class OmniVoice(PreTrainedModel):
 
         try:
             # Resolve to local path first; download only if not already cached
-            resolved_path = _resolve_model_path(pretrained_model_name_or_path)
+            if os.path.isdir(pretrained_model_name_or_path):
+                print(f"[Omnivoice path] FOUND local path {pretrained_model_name_or_path}\n")
+                resolved_path = pretrained_model_name_or_path
+            else:
+                print(f"[Omnivoice path] Download from hub\n")
+                from huggingface_hub import snapshot_download
+                resolved_path = snapshot_download(pretrained_model_name_or_path)
 
             model = super().from_pretrained(resolved_path, *args, **kwargs)
 
@@ -254,15 +312,13 @@ class OmniVoice(PreTrainedModel):
 
                 audio_tokenizer_path = os.path.join(resolved_path, "audio_tokenizer")
 
-                if not os.path.isdir(audio_tokenizer_path):
-                    audio_tokenizer_path = _resolve_model_path(
-                        "eustlb/higgs-audio-v2-tokenizer"
-                    )
+                if not os.path.isdir(audio_tokenizer_path):   
+                    audio_tokenizer_path = _resolve_higgs_path()
 
                 # higgs-audio-v2-tokenizer does not support MPS
                 # (output channels > 65536)
                 tokenizer_device = (
-                    "cpu" if str(model.device).startswith("mps") else model.device
+                    "cuda" if torch.cuda.is_available() else "cpu"
                 )
                 model.audio_tokenizer = HiggsAudioV2TokenizerModel.from_pretrained(
                     audio_tokenizer_path, device_map=tokenizer_device
@@ -274,6 +330,37 @@ class OmniVoice(PreTrainedModel):
                 model.sampling_rate = model.feature_extractor.sampling_rate
 
                 model.duration_estimator = RuleDurationEstimator()
+
+                # -------------------------------------------------------
+                # One-time global CUDA optimizations (TF32, cuDNN benchmark)
+                # Gọi sau khi model đã load; flag module-level đảm bảo
+                # chỉ chạy 1 lần dù from_pretrained được gọi bao nhiêu lần.
+                # -------------------------------------------------------
+                _apply_cuda_global_flags()
+
+                # -------------------------------------------------------
+                # torch.compile cho LLM backbone (chỉ áp dụng 1 lần).
+                # Bỏ qua trên Windows vì Triton chưa hỗ trợ.
+                # -------------------------------------------------------
+                import platform
+                if platform.system() != "Windows":
+                    try:
+                        model.llm = torch.compile(
+                            model.llm, mode="reduce-overhead", dynamic=True
+                        )
+                        print("⚡ torch.compile applied to LLM backbone (reduce-overhead)\n")
+                    except Exception as e:
+                        print(f"⚠️ torch.compile failed (sẽ dùng eager mode): {e}\n")
+                else:
+                    # Windows không hỗ trợ Triton nên bỏ qua torch.compile.
+                    # Thay thế: dùng channels_last memory layout cho LLM — tăng tốc
+                    # conv/attention trên Tensor Core của RTX 4070 mà không cần compile.
+                    try:
+                        model.llm = model.llm.to(memory_format=torch.channels_last)
+                        print("⚡ Windows: LLM backbone → channels_last memory layout (Tensor Core friendly)\n")
+                    except Exception:
+                        print("ℹ️ Windows: eager mode (channels_last không áp dụng được cho LLM này)\n")
+
         finally:
             logging.disable(_prev_disable)
 

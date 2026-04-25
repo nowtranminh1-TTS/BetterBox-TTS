@@ -154,11 +154,11 @@ def vad_trim(audio: np.ndarray, sr: int, margin_s: float = 0.01, verbose: bool =
             wav_tensor, 
             model, 
             sampling_rate=vad_sr, 
-            threshold=0.5,           # HIGHER threshold = Chỉ giữ speech rõ ràng, bỏ breath/noise mờ
-            neg_threshold=0.35,       # Lower neg threshold = Thoát khỏi speech nhanh hơn khi có dấu hiệu silence
-            min_speech_duration_ms=50, # Bỏ các đoạn rè rè ngắn < 50ms
-            min_silence_duration_ms=50, # Phát hiện silence nhanh hơn
-            speech_pad_ms=30,          # Padding nhỏ, không giữ nhiễu thừa
+            threshold=0.5,             # HIGHER threshold = Chỉ giữ speech rõ ràng, bỏ breath/noise mờ -> nếu tăng mà bị cắt nhầm phụ âm cuối thì giảm về 0.5
+            neg_threshold=0.30,         # Lower neg threshold = Thoát khỏi speech nhanh hơn khi có dấu hiệu silence
+            min_speech_duration_ms=80,  # Bỏ các đoạn rè rè ngắn < 50ms
+            min_silence_duration_ms=100, # Phát hiện silence nhanh hơn
+            speech_pad_ms=20,           # Padding nhỏ, không giữ nhiễu thừa
             max_speech_duration_s=10.0, # Chỉ giữ các đoạn speech, cắt bỏ hoàn toàn silence đầu/cuối/giữa
         )
         

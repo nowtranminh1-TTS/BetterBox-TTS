@@ -6,19 +6,21 @@
 
 torch==2.8.0
 torchaudio==2.8.0
-safetensors==0.5.3
+safetensors>=0.7.0
 huggingface_hub>=1.5.0,<2.0
 git+https://github.com/huggingface/transformers.git
 accelerate>=0.33.0
 librosa==0.11.0
 scipy>=1.10.0
 soundfile>=0.12.0
-numpy>=1.24.0,<1.26.0
-gradio>=5.49.0
+# numpy 2.x: compatible with torch 2.8 + librosa 0.11
+# Do NOT use <1.26 -- causes conflicts with newer packages
+numpy>=2.0.0,<3.0
+gradio>=6.0.0
 einops>=0.7.0
 conformer==0.3.2
 s3tokenizer
-diffusers==0.29.0
+diffusers>=0.37.0
 resemble-perth==1.0.1
 omegaconf==2.3.0
 pedalboard

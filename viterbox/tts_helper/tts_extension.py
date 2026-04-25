@@ -105,11 +105,43 @@ class ViterboxExtensionMixin:
 
         # ── CUDA optimizations (chỉ chạy 1 lần khi load model) ──
         if torch.cuda.is_available():
+            # TF32 matmul — ~3x faster, chất lượng audio gần như không đổi
             torch.set_float32_matmul_precision("high")
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
+            # FP16 reduced precision — tận dụng Tensor Core RTX 4070
+            torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+            # Auto-tune conv kernels cho kích thước input ổn định
             torch.backends.cudnn.benchmark = True
-            print("⚡ CUDA optimizations applied (TF32, cuDNN benchmark)\n")
+            # Flash Attention 2 — Windows-safe, không cần Triton
+            # RTX 4070 (Ada Lovelace SM 8.9) hỗ trợ đầy đủ
+            try:
+                torch.backends.cuda.enable_flash_sdp(True)        # Flash Attention 2 (nhanh nhất)
+                torch.backends.cuda.enable_mem_efficient_sdp(True) # Fallback tiết kiệm VRAM
+                torch.backends.cuda.enable_math_sdp(False)         # Tắt slow math path
+                print("⚡ CUDA optimizations applied (TF32 + cuDNN benchmark + Flash Attention 2)\n")
+            except Exception:
+                # PyTorch cũ hơn không có enable_flash_sdp
+                print("⚡ CUDA optimizations applied (TF32 + cuDNN benchmark)\n")
+            # channels_last memory layout — Tensor Core friendly cho conv layers (T3, S3Gen)
+            import platform
+            if platform.system() != "Windows":
+                try:
+                    t3 = torch.compile(t3, mode="reduce-overhead", dynamic=True)
+                    print("⚡ torch.compile applied to T3\n")
+                except Exception as e:
+                    print(f"⚠️ torch.compile T3 failed: {e}\n")
+            else:
+                # Windows không hỗ trợ Triton — dùng channels_last thay thế.
+                # Áp dụng lên model attributes (không phải local variables!)
+                # vì model = cls(...) đã được tạo ở trên và lưu tham chiếu.
+                for _name, _module in [("t3", model.t3), ("s3gen", model.s3gen), ("ve", model.ve)]:
+                    try:
+                        converted = _module.to(memory_format=torch.channels_last)
+                        setattr(model, _name, converted)
+                        print(f"⚡ Windows: {_name} → channels_last memory layout\n")
+                    except Exception:
+                        pass  # Pure transformer — channels_last không áp dụng, bỏ qua
 
         # Load default conditioning nếu có sẵn
         conds_path = ckpt_dir / "conds.pt"

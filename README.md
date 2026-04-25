@@ -12,6 +12,7 @@
 - 1. đã có tính năng pitch control
 - 2. hiện model Omnivoice ĐÃ CÓ chức năng ngắt câu theo dấu câu. 
 - 3. thay model cũ 'ASR whisper' thành 'ASR Chunkformer' - tốc độ nhanh hơn, chính xác hơn, chuyên cho tiếng việt
+- 4. đã chuyển local cho model 'higgs-audio-v2-tokenizer '
 
 ## một số tính năng mới - cho model Viterbox
 - 1. thêm điều chỉnh tốc độ trực tiếp trong model s3gen
@@ -31,8 +32,14 @@
 https://huggingface.co/dolly-vn/viterbox/tree/main
 
 
+# 🔧 tải model higgs-audio-v2-tokenizer và đưa vào folder 'OmniVoice\model_higgs_audio_v2_tokenizer_local' 
+(model này nằm trong pipeline của Omnivoice, bắt buộc phải có)
+https://huggingface.co/eustlb/higgs-audio-v2-tokenizer/tree/main
+
+
 # 🔧 tải model ASR Chunkformer và đưa vào folder 'OmniVoice/model_ASR_chunkformer_local' 
 (model này dùng để detect text cho âm thanh đầu vào - nếu không có text. lý do cần text cho audio mẫu là vì khi TTS bằng omniVoice sẽ chính xác hơn)
+(model này nằm trong pipeline của Omnivoice, bắt buộc phải có)
 https://huggingface.co/khanhld/chunkformer-ctc-large-vie/tree/main
 
 
@@ -40,7 +47,7 @@ https://huggingface.co/khanhld/chunkformer-ctc-large-vie/tree/main
 https://huggingface.co/splendor1811/omnivoice-vietnamese/tree/main
 
 
-# 🔧 hoặc, tải model Omnivoice (bản gốc) và đưa vào folder 'OmniVoice/modelOmniLocal' 
+# 🔧 hoặc (Optional), tải model Omnivoice (bản gốc) và đưa vào folder 'OmniVoice/modelOmniLocal' 
 https://huggingface.co/k2-fsa/OmniVoice/tree/main
 
 

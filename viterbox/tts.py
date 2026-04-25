@@ -376,7 +376,7 @@ class Viterbox(ViterboxExtensionMixin):
                     # bỏ đi những khoảng lặng không cần thiết cho TTS NORMAL
                     audio_np = fix_silent_and_speed_audio(audio_np, self.sr,
                                                           threshold_ms=50,
-                                                          silence_threshold_db=-60)
+                                                          silence_threshold_db=-45)
                     # [SRT FILE] Tạo timing item cho segment này
                     segment_duration = len(audio_np) / self.sr
                     start_time = current_time
