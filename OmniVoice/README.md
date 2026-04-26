@@ -122,7 +122,7 @@ import torch
 model = OmniVoice.from_pretrained(
     "k2-fsa/OmniVoice",
     device_map="cuda:0",
-    dtype=torch.float16
+    dtype=torch.float32
 )
 # Apple Silicon users: use device_map="mps" instead
 

@@ -144,7 +144,7 @@ class OmniVoiceGenerationConfig:
     guidance_scale: float = 2.0
     t_shift: float = 0.1
     layer_penalty_factor: float = 5.0
-    position_temperature: float = 5.0
+    position_temperature: float = 0.0
     class_temperature: float = 0.0
     denoise: bool = True
     preprocess_prompt: bool = True
@@ -652,6 +652,7 @@ class OmniVoice(PreTrainedModel):
 
         return generated_audios
 
+    @torch.inference_mode()
     def create_voice_clone_prompt(
         self,
         ref_audio: Union[str, tuple[torch.Tensor, int]],
@@ -1569,7 +1570,7 @@ def _gumbel_sample(logits: torch.Tensor, temperature: float) -> torch.Tensor:
 def _get_time_steps(
     t_start: float = 0.0,
     t_end: float = 1.0,
-    num_step: int = 10,
+    num_step: int = 64,
     t_shift: float = 1.0,
     device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:

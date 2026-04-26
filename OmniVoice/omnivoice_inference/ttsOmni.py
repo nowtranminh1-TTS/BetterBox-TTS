@@ -138,7 +138,7 @@ class Omni:
 
     def loadModelOmni(self) -> Any:
         if self.model is None:
-            dtype = torch.float16 if self.device != "cpu" else torch.float32
+            dtype = torch.float32 # Ép toàn bộ về FP32 cho độ chính xác cao nhất
             omni_voice_cls = _import_omnivoice_class()
             model = cast(Any, omni_voice_cls.from_pretrained(
                 self.model_path,
@@ -286,8 +286,7 @@ def generate_speech_omni(
             # ---------------------đảm bảo CUDA ops xong hết-------------------------
             if torch.cuda.is_available():
                 torch.cuda.synchronize()   # đảm bảo CUDA ops xong hết
-                torch.cuda.empty_cache()
-            gc.collect()
+            # Không gọi empty_cache() ở đây để tránh phân mảnh VRAM và giảm tốc độ
         else:
             # [SRT FILE] Cộng thời gian pause của dấu câu vào current_time
             pause_seconds = seg['pause_ms'] / 1000.0
@@ -348,5 +347,10 @@ def generate_speech_omni(
     print(f"\n✅ done, đã inference xong với OmniVoice và tạo file SRT | duration={duration:.2f}s\n", flush=True)
     print(f"===========================================================================================================")
     print(f"===========================================================================================================\n\n\n")
+
+    # Dọn dẹp VRAM một lần duy nhất sau khi hoàn thành toàn bộ text
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
 
     return (omni.sampling_rate, result), status, srt_temp_path

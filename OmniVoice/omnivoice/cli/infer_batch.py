@@ -100,7 +100,7 @@ def get_parser():
     parser.add_argument(
         "--num_step",
         type=int,
-        default=32,
+        default=64,
         help="Number of steps for iterative decoding.",
     )
     parser.add_argument(
@@ -179,7 +179,7 @@ def get_parser():
     parser.add_argument(
         "--position_temperature",
         type=float,
-        default=5.0,
+        default=0.0,
         help="The temperature for position selection.",
     )
     parser.add_argument(
@@ -235,7 +235,7 @@ def process_init(rank_queue, model_checkpoint, warmup=0):
     worker_model = OmniVoice.from_pretrained(
         model_checkpoint,
         device_map=worker_device,
-        dtype=torch.float16,
+        dtype=torch.float32,
     )
 
     if warmup > 0:

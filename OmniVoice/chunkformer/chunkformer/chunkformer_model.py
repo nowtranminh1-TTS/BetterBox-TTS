@@ -708,7 +708,7 @@ def main():
     parser.add_argument(
         "--autocast_dtype",
         type=str,
-        choices=["fp32", "bf16", "fp16"],
+        choices=["fp32"],
         default=None,
         help="Dtype for autocast. If not provided, autocast is disabled by default.",
     )
@@ -716,7 +716,7 @@ def main():
     # Parse arguments
     args = parser.parse_args()
     device = torch.device(args.device)
-    dtype = {"fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16, None: None}[
+    dtype = {"fp32": torch.float32, None: None}[
         args.autocast_dtype
     ]
 

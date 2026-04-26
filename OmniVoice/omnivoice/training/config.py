@@ -72,7 +72,7 @@ class TrainingConfig:
     num_workers: int = 8
 
     # System
-    mixed_precision: str = "bf16"
+    mixed_precision: str = "fp32"
     allow_tf32: bool = True
     use_deepspeed: bool = False
     deepspeed_config: Optional[str] = None

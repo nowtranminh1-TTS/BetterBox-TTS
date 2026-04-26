@@ -89,7 +89,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Language name (e.g. 'English') or code (e.g. 'en').",
     )
     # Generation parameters
-    parser.add_argument("--num_step", type=int, default=32)
+    parser.add_argument("--num_step", type=int, default=64)
     parser.add_argument("--guidance_scale", type=float, default=2.0)
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument(
@@ -108,7 +108,7 @@ def get_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--layer_penalty_factor", type=float, default=5.0)
-    parser.add_argument("--position_temperature", type=float, default=5.0)
+    parser.add_argument("--position_temperature", type=float, default=0.0)
     parser.add_argument("--class_temperature", type=float, default=0.0)
     parser.add_argument(
         "--device",
@@ -128,7 +128,7 @@ def main():
     device = args.device or get_best_device()
     logging.info(f"Loading model from {args.model} on {device} ...")
     model = OmniVoice.from_pretrained(
-        args.model, device_map=device, dtype=torch.float16
+        args.model, device_map=device, dtype=torch.float32
     )
 
     logging.info(f"Generating audio for: {args.text[:80]}...")

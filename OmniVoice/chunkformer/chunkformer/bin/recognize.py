@@ -48,7 +48,7 @@ def get_args():
         help="accelerator to use",
     )
     parser.add_argument(
-        "--dtype", type=str, default="fp32", choices=["fp16", "fp32", "bf16"], help="model's dtype"
+        "--dtype", type=str, default="fp32", choices=["fp32"], help="model's dtype"
     )
     parser.add_argument(
         "--num_workers", default=0, type=int, help="num of subprocess workers for reading"
@@ -240,10 +240,6 @@ def main():
     print(f"Total parameters: {total_params:,}")  # noqa: E231
 
     dtype = torch.float32
-    if args.dtype == "fp16":
-        dtype = torch.float16
-    elif args.dtype == "bf16":
-        dtype = torch.bfloat16
     logging.info("compute dtype is {}".format(dtype))
 
     context_graph = None

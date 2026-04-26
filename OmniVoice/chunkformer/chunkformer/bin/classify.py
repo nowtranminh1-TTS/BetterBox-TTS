@@ -43,7 +43,7 @@ def get_args():
     parser.add_argument("--left_context_size", type=int, default=-1, help="Left context size")
     parser.add_argument("--right_context_size", type=int, default=-1, help="Right context size")
     parser.add_argument(
-        "--dtype", default="fp32", choices=["fp16", "fp32"], help="Data type for inference"
+        "--dtype", default="fp32", choices=["fp32"], help="Data type for inference"
     )
     return parser.parse_args()
 
@@ -108,12 +108,8 @@ def main():
     detail_file = os.path.join(args.result_dir, "predictions_detail.jsonl")
 
     # Setup dtype
-    if args.dtype == "fp16":
-        dtype = torch.float16
-        autocast_context = torch.cuda.amp.autocast
-    else:
-        dtype = torch.float32
-        autocast_context = nullcontext
+    dtype = torch.float32
+    autocast_context = nullcontext
 
     # Run inference
     logging.info("Starting inference...")

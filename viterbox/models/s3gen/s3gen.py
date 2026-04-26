@@ -147,13 +147,14 @@ class S3Token2Mel(torch.nn.Module):
         ref_speech_tokens, ref_speech_token_lens = self.tokenizer(ref_wav_16)
 
         # Make sure mel_len = 2 * stoken_len (happens when the input is not padded to multiple of 40ms)
-        if ref_mels_24.shape[1] != 2 * ref_speech_tokens.shape[1]:
-            # logging.warning(
-            #     "Reference mel length is not equal to 2 * reference token length.\n"
-            # )
-            pass
-            ref_speech_tokens = ref_speech_tokens[:, :ref_mels_24.shape[1] // 2]
-            ref_speech_token_lens[0] = ref_speech_tokens.shape[1]
+        min_tokens = min(ref_speech_tokens.shape[1], ref_mels_24.shape[1] // 2)
+        
+        if ref_speech_tokens.shape[1] != min_tokens:
+            ref_speech_tokens = ref_speech_tokens[:, :min_tokens]
+            ref_speech_token_lens[0] = min_tokens
+            
+        if ref_mels_24.shape[1] != min_tokens * 2:
+            ref_mels_24 = ref_mels_24[:, :min_tokens * 2, :]
 
         return dict(
             prompt_token=ref_speech_tokens.to(device),
@@ -210,6 +211,18 @@ class S3Token2Mel(torch.nn.Module):
 
         # assert speech_tokens.shape[0] == 1, "only batch size of one allowed for now"
         speech_token_lens = torch.LongTensor([speech_tokens.size(1)]).to(self.device)
+
+        # Handle potential mismatch from old conds.pt files
+        if "prompt_token" in ref_dict and "prompt_feat" in ref_dict:
+            p_tok_len = ref_dict["prompt_token"].shape[1]
+            p_feat_len = ref_dict["prompt_feat"].shape[1]
+            if p_feat_len != p_tok_len * 2:
+                min_toks = min(p_tok_len, p_feat_len // 2)
+                ref_dict["prompt_token"] = ref_dict["prompt_token"][:, :min_toks]
+                ref_dict["prompt_feat"] = ref_dict["prompt_feat"][:, :min_toks * 2, :]
+                ref_dict["prompt_token_len"][0] = min_toks
+                if "prompt_feat_len" in ref_dict and ref_dict["prompt_feat_len"] is not None:
+                    ref_dict["prompt_feat_len"][0] = min_toks * 2
 
         output_mels, _ = self.flow.inference(
             token=speech_tokens,

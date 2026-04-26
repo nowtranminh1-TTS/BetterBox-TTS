@@ -238,11 +238,8 @@ class Viterbox(ViterboxExtensionMixin):
                 print(f"⚠️ pitch_shift (pedalboard) failed: {e}")
 
         del speech_tokens, wav
-        gc.collect()
         if torch.cuda.is_available():
-            # Dọn bộ nhớ theo lô sau mỗi câu để hạn chế phân mảnh VRAM
             torch.cuda.synchronize()
-            torch.cuda.empty_cache()
 
         return result
 
@@ -257,16 +254,16 @@ class Viterbox(ViterboxExtensionMixin):
         skip_processing: bool = False,
         exaggeration: float = 0.0,          # Tăng để âm đuôi mượt hơn, giảm thì âm đuôi cảm xúc mạnh hơn
         cfg_weight: Optional[float] = None,  # None = dùng default 1.0
-        temperature: Optional[float] = None, # None = dùng default 0.1
-        top_p: Optional[float] = None,       # None = dùng default 0.1
+        temperature: Optional[float] = None, # None = dùng default 0.0
+        top_p: Optional[float] = None,       # None = dùng default 1.0
         repetition_penalty: Optional[float] = None,  # None = dùng default 1.0
         speed: float = 1.0,                  # Mel interpolation speed: 0.7~1.5 (1.0=bình thường)
         pitch_shift: float = 1.0,            # F0 scaling pitch: 0.5~2.0 (1.0=bình thường)
     ) -> torch.Tensor:
 
         cfg_weight         = cfg_weight         if cfg_weight         is not None else 1.0  # tăng: đọc đúng từ hơn
-        temperature        = temperature        if temperature        is not None else 0.1  # độ ngẫu nhiên khi chọn token
-        top_p              = top_p              if top_p              is not None else 0.1  # giới hạn tập token được chọn
+        temperature        = temperature        if temperature        is not None else 0.0  # 0.0: greedy decoding (chính xác nhất)
+        top_p              = top_p              if top_p              is not None else 1.0  # Không filter nếu greedy
         repetition_penalty = float(repetition_penalty if repetition_penalty is not None else 1.0)  # hơn 1.0 để tránh lặp token
         trailing_silence_ms: int  = 250  # thêm silence đuôi để tránh hai câu sát quá, đọc như đọc rap
 
@@ -275,13 +272,17 @@ class Viterbox(ViterboxExtensionMixin):
         # Nếu KHÁC → encode lại
         # Cache chỉ tồn tại khi app đang mở; tắt/khởi động lại app sẽ reset
         if audio_prompt is not None:
-            current_key = self._get_audio_prompt_key(audio_prompt)
-            if self.conds is not None and current_key == self._last_audio_prompt_key:
-                print("\n♻️♻️♻️ Reusing cached audio conditioning (same audio prompt as before) ♻️♻️♻️")
+            if isinstance(audio_prompt, (str, Path)) and not Path(audio_prompt).exists():
+                print(f"⚠️ Audio prompt '{audio_prompt}' not found (maybe temp file deleted). Falling back to default reference sound.")
+                audio_prompt = None
             else:
-                print("\n🆕🆕🆕 Creating new audio prompt...")
-                self.prepare_conditionals(audio_prompt, exaggeration)
-        elif self.conds is None:
+                current_key = self._get_audio_prompt_key(audio_prompt)
+                if self.conds is not None and getattr(self, "_last_audio_prompt_key", None) == current_key:
+                    print("\n♻️♻️♻️ Reusing cached audio conditioning (same audio prompt as before) ♻️♻️♻️")
+                else:
+                    print("\n🆕🆕🆕 Creating new audio prompt...")
+                    self.prepare_conditionals(audio_prompt, exaggeration)
+        if audio_prompt is None and self.conds is None:
             random_voice = get_reference_sound()
             if random_voice is not None:
                 self.prepare_conditionals(random_voice, exaggeration)
@@ -336,9 +337,7 @@ class Viterbox(ViterboxExtensionMixin):
         for seg in segments:
             if seg["type"] == SEGMENT_TEXT:
 
-                # giải phóng VRAM trước khi generate để tránh lỗi tích lũy
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                # Không clear cache ở đây để tránh phân mảnh VRAM
 
 # --------------------------- INFERENCE TTS with advance mode -----------------------------------
                 if advance_TTS:
@@ -402,8 +401,6 @@ class Viterbox(ViterboxExtensionMixin):
                 # Dọn sau mỗi câu để ổn định khi infer nhiều lần liên tiếp
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()   # đảm bảo CUDA ops xong hết
-                    torch.cuda.empty_cache()
-                gc.collect()
             else:
                 # [SRT FILE] Cộng thời gian pause của dấu câu vào current_time
                 pause_seconds = seg['pause_ms'] / 1000.0
@@ -413,7 +410,7 @@ class Viterbox(ViterboxExtensionMixin):
 
 # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
         if not audio_pieces:
-            return torch.zeros(1, self.sr)
+            return (torch.zeros(1, self.sr)), "❌ Không tạo được âm thanh từ text", None
 
         result = audio_pieces[0]
         for i in range(1, len(audio_pieces)):
@@ -460,6 +457,11 @@ class Viterbox(ViterboxExtensionMixin):
         print(f"\n✅ done, đã inference xong với Viterbox và tạo file SRT | duration={duration:.2f}s\n", flush=True)
         print(f"===========================================================================================================")
         print(f"===========================================================================================================\n\n\n")
+
+        # Dọn dẹp VRAM một lần duy nhất sau khi hoàn thành toàn bộ text
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
         return (torch.from_numpy(result).unsqueeze(0)), status, srt_temp_path
 

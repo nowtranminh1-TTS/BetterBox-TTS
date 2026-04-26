@@ -184,10 +184,10 @@ def add_ddp_args(parser):
         help="Use automatic mixed precision training",
     )
     parser.add_argument(
-        "--fp16_grad_sync",
+        "--fp32_grad_sync",
         action="store_true",
         default=False,
-        help="Use fp16 gradient sync for ddp",
+        help="Use fp32 gradient sync for ddp",
     )
     return parser
 
@@ -218,9 +218,8 @@ def add_fsdp_args(parser):
     parser.add_argument(
         "--dtype",
         default="fp32",
-        choices=["fp32", "fp16", "bf16"],
-        help="when amp is used, dtype is automatically set to fp16.\
-        this arg has no effect when deepspeed is enabled.",
+        choices=["fp32"],
+        help="this arg has no effect when deepspeed is enabled.",
     )
     parser.add_argument(
         "--fsdp_cpu_offload",
@@ -277,8 +276,8 @@ def init_distributed(args):
 def check_modify_and_save_config(args, configs, symbol_table):
     if args.train_engine in ["torch_ddp", "torch_fsdp"]:
         if args.use_amp:
-            configs["dtype"] = "fp16"
-            args.dtype = "fp16"
+            configs["dtype"] = "fp32"
+            args.dtype = "fp32"
         else:
             configs["dtype"] = args.dtype
     elif args.train_engine == "deepspeed":
@@ -308,12 +307,7 @@ def check_modify_and_save_config(args, configs, symbol_table):
         #       ref: https://github.com/microsoft/DeepSpeed/issues/62
         with open(args.deepspeed_config, "r") as fin:
             ds_configs = json.load(fin)
-        if "fp16" in ds_configs and ds_configs["fp16"]["enabled"]:
-            configs["dtype"] = "fp16"
-        elif "bf16" in ds_configs and ds_configs["bf16"]["enabled"]:
-            configs["dtype"] = "bf16"
-        else:
-            configs["dtype"] = "fp32"
+        configs["dtype"] = "fp32"
         assert ds_configs["train_micro_batch_size_per_gpu"] == 1
         assert ds_configs["gradient_accumulation_steps"] == configs["accum_grad"]
         assert ds_configs["gradient_clipping"] == configs["grad_clip"]
@@ -439,8 +433,6 @@ def wrap_cuda_model(args, model, configs=None):
         assert configs is not None
         mixed_precision_dtype = {
             "fp32": torch.float32,
-            "fp16": torch.float16,
-            "bf16": torch.bfloat16,
         }[configs["dtype"]]
 
         sharding_strategy = {
@@ -479,10 +471,8 @@ def wrap_cuda_model(args, model, configs=None):
     else:
         logging.error("not supported engine: {}".format(args.train_engine))
     if args.train_engine in ["torch_fsdp", "torch_ddp"]:
-        if args.fp16_grad_sync:
+        if args.fp32_grad_sync:
             from torch.distributed.algorithms.ddp_comm_hooks import default as comm_hooks
-
-            model.register_comm_hook(state=None, hook=comm_hooks.fp16_compress_hook)
 
     return model, device
 
@@ -598,10 +588,7 @@ def init_scaler(args):
         else:
             logging.error("not supported device: {}".format(args.device))
     elif args.train_engine == "torch_fsdp":
-        # why bf16 don't need scaler:
-        # https://discuss.pytorch.org/t/why-bf16-do-not-need-loss-scaling/176596
-        if args.dtype in ["fp16"]:
-            scaler = sharded_grad_scaler.ShardedGradScaler(enabled=True)
+        pass
     return scaler
 
 
@@ -667,13 +654,7 @@ def wenet_join(group_join, info_dict):
 def batch_forward(model, batch, scaler, info_dict, device):
     train_engine = info_dict.get("train_engine", "torch_ddp")
 
-    dtype = info_dict.get("dtype", "fp32")
-    if dtype == "fp16":
-        dtype = torch.float16
-    elif dtype == "bf16":
-        dtype = torch.bfloat16
-    else:  # fp32
-        dtype = None
+    dtype = None
 
     # autocast context
     # The more details about amp can be found in

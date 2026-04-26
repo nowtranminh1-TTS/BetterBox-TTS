@@ -12,7 +12,7 @@ from omnivoice import OmniVoice
 model = OmniVoice.from_pretrained(
     "k2-fsa/OmniVoice",
     device_map="cuda:0",
-    dtype=torch.float16
+    dtype=torch.float32
 )
 
 audio = model.generate(

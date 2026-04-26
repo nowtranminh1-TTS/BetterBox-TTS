@@ -147,7 +147,7 @@ def load_whisper_model(model_dir, device):
         "automatic-speech-recognition",
         model=model_path,
         chunk_length_s=30,
-        dtype=torch.float16 if "cuda" in str(device) else torch.float32,
+        dtype=torch.float32,
         device=device,
     )
     return pipe

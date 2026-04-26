@@ -348,17 +348,22 @@ class T3(nn.Module):
             logits = logits_cond + cfg_weight * (logits_cond - logits_uncond)
             logits = logits.squeeze(1)
 
-            # Apply temperature scaling.
-            if temperature != 1.0:
-                logits = logits / temperature
+            if temperature > 0.0:
+                # Apply temperature scaling.
+                if temperature != 1.0:
+                    logits = logits / temperature
 
-            # Apply repetition penalty and top‑p filtering.
-            logits = repetition_penalty_processor(generated_ids, logits)
-            logits = top_p_warper(None, logits)
+                # Apply repetition penalty and top‑p filtering.
+                logits = repetition_penalty_processor(generated_ids, logits)
+                logits = top_p_warper(None, logits)
 
-            # Convert logits to probabilities and sample the next token.
-            probs = torch.softmax(logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)  # shape: (B, 1)
+                # Convert logits to probabilities and sample the next token.
+                probs = torch.softmax(logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)  # shape: (B, 1)
+            else:
+                # Greedy decoding for absolute maximum accuracy and determinism
+                logits = repetition_penalty_processor(generated_ids, logits)
+                next_token = torch.argmax(logits, dim=-1).unsqueeze(-1)  # shape: (B, 1)
 
             predicted.append(next_token)
             generated_ids = torch.cat([generated_ids, next_token], dim=1)

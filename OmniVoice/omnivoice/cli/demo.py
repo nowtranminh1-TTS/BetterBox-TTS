@@ -185,7 +185,7 @@ def build_demo(
             return None, "Please enter the text to synthesize."
 
         gen_config = OmniVoiceGenerationConfig(
-            num_step=int(num_step or 32),
+            num_step=int(num_step or 64),
             guidance_scale=float(guidance_scale) if guidance_scale is not None else 2.0,
             denoise=bool(denoise) if denoise is not None else True,
             preprocess_prompt=bool(preprocess_prompt),
@@ -527,7 +527,7 @@ def main(argv=None) -> int:
     model = OmniVoice.from_pretrained(
         checkpoint,
         device_map=device,
-        dtype=torch.float16,
+        dtype=torch.float32,
         load_asr=not args.no_asr,
         asr_model_name=args.asr_model,
     )

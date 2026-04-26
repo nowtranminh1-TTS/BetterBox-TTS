@@ -211,7 +211,7 @@ def log_add(arr: list[float]) -> float:
 
 def mask_to_bias(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
     assert mask.dtype == torch.bool
-    assert dtype in [torch.float32, torch.bfloat16, torch.float16]
+    assert dtype == torch.float32, f"Strict Accuracy Mode: Expected float32, but got {dtype}"
     mask = mask.to(dtype)
     # attention mask bias
     # NOTE(Mddct): torch.finfo jit issues

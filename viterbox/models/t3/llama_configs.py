@@ -28,7 +28,7 @@ LLAMA_520M_CONFIG_DICT = dict(
         rope_type="llama3"
     ),
     rope_theta=500000.0,
-    torch_dtype="bfloat16",
+    torch_dtype="float32",
     use_cache=True,
 )
 
