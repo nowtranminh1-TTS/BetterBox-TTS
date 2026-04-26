@@ -98,24 +98,30 @@ def _apply_cuda_global_flags() -> None:
     if _CUDA_OPTIMIZED:
         return  # Đã set rồi, bỏ qua
     if torch.cuda.is_available():
-        # TF32 cho matmul — nhanh hơn ~3x, chất lượng audio gần như không đổi
-        torch.set_float32_matmul_precision("high")
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        # FP16 reduced precision accumulation — tận dụng Tensor Core trên RTX 4070
-        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-        # Auto-tune convolution kernels cho kích thước input ổn định
-        torch.backends.cudnn.benchmark = True
-        # Flash Attention 2 — Windows-safe, không cần Triton
-        # RTX 4070 (Ada Lovelace SM 8.9) hỗ trợ đầy đủ
+        # --- TỐI ƯU HÓA CHO ĐỘ CHÍNH XÁC TUYỆT ĐỐI (MAXIMUM ACCURACY) ---
+        
+        # 1. Dùng FP32 nguyên bản, KHÔNG dùng TF32 xấp xỉ
+        torch.set_float32_matmul_precision("highest")
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        
+        # 2. KHÔNG dùng FP16 để cộng dồn (tránh sai số làm tròn cực kỳ quan trọng cho Audio)
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+        
+        # 3. Ép cuDNN dùng các thuật toán chuẩn xác nhất, loại bỏ sự ngẫu nhiên
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.use_deterministic_algorithms(True, warn_only=True) # Ép toàn bộ PyTorch dùng thuật toán Tất Định
+        
+        # 4. Attention: CHỈ dùng Math SDP (chính xác tuyệt đối), TẮT Flash Attention và Mem Efficient Attention
         try:
-            torch.backends.cuda.enable_flash_sdp(True)        # Flash Attention 2 (nhanh nhất)
-            torch.backends.cuda.enable_mem_efficient_sdp(True) # Fallback tiết kiệm VRAM
-            torch.backends.cuda.enable_math_sdp(False)         # Tắt slow math path
-            print("⚡ CUDA global flags: TF32 + cuDNN benchmark + Flash Attention 2 enabled (one-time)\n")
+            torch.backends.cuda.enable_math_sdp(True)          # Bật tính toán chính xác truyền thống (Math SDP)
+            torch.backends.cuda.enable_flash_sdp(False)        # Tắt FA2 để loại bỏ hoàn toàn sai số xấp xỉ
+            torch.backends.cuda.enable_mem_efficient_sdp(False) # Tắt Mem Efficient để đảm bảo bit-exactness
+            print("⚡ CUDA global flags: Đã cấu hình ưu tiên ĐỘ CHÍNH XÁC TUYỆT ĐỐI (FP32, Deterministic, Math SDP)\n")
         except Exception:
-            # PyTorch cũ hơn không có enable_flash_sdp
-            print("⚡ CUDA global flags: TF32 + cuDNN benchmark enabled (one-time)\n")
+            print("⚡ CUDA global flags: Đã cấu hình ưu tiên ĐỘ CHÍNH XÁC TUYỆT ĐỐI\n")
+
     _CUDA_OPTIMIZED = True
 
 
@@ -134,7 +140,7 @@ class VoiceClonePrompt:
 
 @dataclass
 class OmniVoiceGenerationConfig:
-    num_step: int = 32
+    num_step: int = 64  # Tăng từ 32 lên 64: giải mã kỹ hơn giúp phát âm chuẩn xác, giảm lỗi nuốt từ (tốc độ chậm hơn)
     guidance_scale: float = 2.0
     t_shift: float = 0.1
     layer_penalty_factor: float = 5.0
@@ -353,13 +359,10 @@ class OmniVoice(PreTrainedModel):
                         print(f"⚠️ torch.compile failed (sẽ dùng eager mode): {e}\n")
                 else:
                     # Windows không hỗ trợ Triton nên bỏ qua torch.compile.
-                    # Thay thế: dùng channels_last memory layout cho LLM — tăng tốc
-                    # conv/attention trên Tensor Core của RTX 4070 mà không cần compile.
-                    try:
-                        model.llm = model.llm.to(memory_format=torch.channels_last)
-                        print("⚡ Windows: LLM backbone → channels_last memory layout (Tensor Core friendly)\n")
-                    except Exception:
-                        print("ℹ️ Windows: eager mode (channels_last không áp dụng được cho LLM này)\n")
+                    # Ép toàn bộ model sang FP32 để tính toán activation ở độ phân giải cao nhất
+                    # (Ngăn chặn sai số làm tròn của FP16/BF16 trong quá trình cộng dồn ma trận)
+                    model = model.to(dtype=torch.float32)
+                    print("⚡ Windows: Chạy Eager mode FP32 mặc định, ưu tiên ĐỘ CHÍNH XÁC TUYỆT ĐỐI\n")
 
         finally:
             logging.disable(_prev_disable)

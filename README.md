@@ -7,6 +7,8 @@
 - 2. fix bug UI
 - 3. thêm tính năng *TẠO SRT FILE* - khi generate audio thì file SRT cũng sẽ tự generate luôn
 - 4. có tính năng silero VAD
+- 5. thêm voice doraemon và nobita 
+- 6. đã config lại tối ưu độ chính xác thay vì tốc độ
 
 ## một số tính năng mới - cho model Omnivoice
 - 1. đã có tính năng pitch control

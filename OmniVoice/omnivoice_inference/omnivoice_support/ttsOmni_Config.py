@@ -4,8 +4,13 @@ import hashlib
 import json
 import os
 import torch
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, cast
+
+from general.general_tool_audio import (  # type: ignore
+    clearText,
+)
 
 if TYPE_CHECKING:
     # Relative import: 3 levels up (omnivoice_support -> omnivoice_inference -> OmniVoice root)
@@ -16,6 +21,7 @@ if TYPE_CHECKING:
 _voice_clone_cache: dict[str, Any] = {}
 _CACHE_FILE = Path(__file__).parent / "voice_clone_prompt_cache.json"
 
+_ONE_SPEECH_TIME = 150 # đã test, khuyên là ít nhất 100ms, đừng thấp hơn
 
 def _get_file_fingerprint(file_path: str) -> str:
     """
@@ -170,7 +176,37 @@ def addConfigTextOmni(text: str) -> str:
 
     return text
 
+"""
+def get_list_word(word: str) -> list:
+    # Chuẩn hóa về dạng 'dựng sẵn' để các chữ có dấu không bị tách rời
+    word = unicodedata.normalize('NFC', word)
+    return list(word)
 
+def getDurationOfText(text: str) -> float: 
+    text = clearText(text)
+    text = text.casefold()  # đảm bảo chữ thường hết
+    
+    getDuration = 0
+
+    # tách text thành danh sách các chữ/từ
+    numberOfWords = text.split()  # ← ĐỔI len(text) → text.split()
+
+    print(f" 📝 số chữ trong text là: {len(numberOfWords)}\n")  # ← in len() để đếm
+
+    for item in numberOfWords:  # bây giờ item là từng từ (str), iterate được
+
+        # số ký tự trong một chữ 
+        countCharacter = len(get_list_word(item))
+
+        timeForOneWord = _ONE_SPEECH_TIME * countCharacter
+
+        getDuration = getDuration + timeForOneWord
+        
+        print(f" 🏷️số từ trong chữ: {item}, là: {countCharacter}, 🕒thời gian cho chữ đó: {timeForOneWord}\n")
+
+    # model.generate() nhận duration theo giây (seconds), nên phải chia 1000
+    return getDuration / 1000.0
+"""
 
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
@@ -190,6 +226,10 @@ def inferWithModelOmni(
     # thì language đổi thành "vietnamese". còn lại thì language giữ nguyên
     if language is None or language.lower() == "vi":
         language = "vietnamese"
+
+    # đặt hàm ở đây để tránh bị chuẩn hóa, tránh sai khi get duration <- hiện tại model đang ngáo tham số này
+    #duration = getDurationOfText(text=text)
+    #print(f" 💰⏱️ Thời gian đọc text ước tính: {duration}ms\n")
 
     if len(text.strip().split()) == 1:
         text = addConfigTextOmni(text)
@@ -256,7 +296,6 @@ def inferWithModelOmni(
         language=language,
     )
 
-
     generate_kwargs = {
         "text": text,
         "language": language,
@@ -264,7 +303,7 @@ def inferWithModelOmni(
         "voice_clone_prompt": voice_clone_prompt,
         #"instruct": "female, young adult, high pitch, whisper",
         "speed": speed,
-       # "duration": duration,  # Kiểm soát tốc độ đọc cố định (tránh nhanh/ngắn khác nhau)
+        #"duration": duration,  # Kiểm soát tốc độ đọc cố định (tránh nhanh/ngắn khác nhau) <- hiện tại model đang ngáo tham số này
     }
     if num_step is not None:
         generate_kwargs["num_step"] = num_step

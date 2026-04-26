@@ -173,11 +173,11 @@ def generate_speech_omni(
     pitch_shift: float = 1.0,            # F0 scaling pitch: 0.5~2.0 (1.0=bình thường)
 ):
     if not (text or "").strip():
-        return None, "❌ Please enter some text"
+        return None, "❌ Please enter some text", None
     if not reference_audio:
         ref_path = get_reference_sound()
         if ref_path is None:
-            return None, "❌ No reference audio! Add .wav files to wavs/ folder"
+            return None, "❌ No reference audio! Add .wav files to wavs/ folder", None
         reference_audio = str(ref_path)
 
     # ── Preprocess text ────────────────────────────────────────────────────
@@ -218,6 +218,8 @@ def generate_speech_omni(
         if seg["type"] == SEGMENT_TEXT:
 
             spoken = seg["content"]
+
+            print(f"\n===================================================")
             print(f"\n  🔊📢🔊 Omni Generating: {spoken}\n", flush=True)
 
             audios = omni._inferWithModelOmni(
@@ -230,6 +232,13 @@ def generate_speech_omni(
 
             # audios là list, lấy phần tử đầu tiên
             getFirstAudio = audios[0]
+
+            # Debug: kiểm tra âm thanh đầu ra
+            if hasattr(getFirstAudio, 'shape'):
+                max_amp = float(np.max(np.abs(getFirstAudio))) if len(getFirstAudio) > 0 else 0.0
+                print(f"   🐛 [DEBUG] getFirstAudio: shape={getFirstAudio.shape}, max_amp={max_amp:.4f}")
+            else:
+                print(f"   🐛 [DEBUG] getFirstAudio: type={type(getFirstAudio)}")
 
             # giữ lại speech, bỏ non-speech
             getFirstAudio = vad_trim(getFirstAudio, omni.sampling_rate, margin_s=0.05)
@@ -288,7 +297,7 @@ def generate_speech_omni(
 
  # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
     if not audio_pieces:
-        return torch.zeros(1, omni.sampling_rate)
+        return None, "❌ Không tạo được âm thanh từ text", None
 
     print(f"\n🔢 🧩 count audio_pieces: {len(audio_pieces)}, count join_before: {len(join_before)}")
     for idx, piece in enumerate(audio_pieces):

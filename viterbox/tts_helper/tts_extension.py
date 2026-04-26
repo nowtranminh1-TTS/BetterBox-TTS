@@ -105,24 +105,30 @@ class ViterboxExtensionMixin:
 
         # ── CUDA optimizations (chỉ chạy 1 lần khi load model) ──
         if torch.cuda.is_available():
-            # TF32 matmul — ~3x faster, chất lượng audio gần như không đổi
-            torch.set_float32_matmul_precision("high")
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            # FP16 reduced precision — tận dụng Tensor Core RTX 4070
-            torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-            # Auto-tune conv kernels cho kích thước input ổn định
-            torch.backends.cudnn.benchmark = True
-            # Flash Attention 2 — Windows-safe, không cần Triton
-            # RTX 4070 (Ada Lovelace SM 8.9) hỗ trợ đầy đủ
+            # --- TỐI ƯU HÓA CHO ĐỘ CHÍNH XÁC TUYỆT ĐỐI (MAXIMUM ACCURACY) ---
+        
+            # 1. Dùng FP32 nguyên bản, KHÔNG dùng TF32 xấp xỉ
+            torch.set_float32_matmul_precision("highest")
+            torch.backends.cuda.matmul.allow_tf32 = False
+            torch.backends.cudnn.allow_tf32 = False
+            
+            # 2. KHÔNG dùng FP16 để cộng dồn (tránh sai số làm tròn cực kỳ quan trọng cho Audio)
+            torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+            
+            # 3. Ép cuDNN dùng các thuật toán chuẩn xác nhất, loại bỏ sự ngẫu nhiên
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+            torch.use_deterministic_algorithms(True, warn_only=True) # Ép dùng thuật toán Tất Định
+
+            # Attention: CHỈ dùng Math SDP (chính xác tuyệt đối), TẮT Flash Attention và Mem Efficient Attention
             try:
-                torch.backends.cuda.enable_flash_sdp(True)        # Flash Attention 2 (nhanh nhất)
-                torch.backends.cuda.enable_mem_efficient_sdp(True) # Fallback tiết kiệm VRAM
-                torch.backends.cuda.enable_math_sdp(False)         # Tắt slow math path
-                print("⚡ CUDA optimizations applied (TF32 + cuDNN benchmark + Flash Attention 2)\n")
+                torch.backends.cuda.enable_math_sdp(True)          # Bật tính toán chính xác truyền thống (Math SDP)
+                torch.backends.cuda.enable_flash_sdp(False)        # Tắt FA2 để loại bỏ hoàn toàn sai số xấp xỉ
+                torch.backends.cuda.enable_mem_efficient_sdp(False) # Tắt Mem Efficient để đảm bảo bit-exactness
+                print("⚡ CUDA optimizations applied (Math SDP for Maximum Accuracy)\n")
             except Exception:
                 # PyTorch cũ hơn không có enable_flash_sdp
-                print("⚡ CUDA optimizations applied (TF32 + cuDNN benchmark)\n")
+                print("⚡ CUDA optimizations applied (Maximum Accuracy fallback)\n")
             # channels_last memory layout — Tensor Core friendly cho conv layers (T3, S3Gen)
             import platform
             if platform.system() != "Windows":
@@ -132,16 +138,11 @@ class ViterboxExtensionMixin:
                 except Exception as e:
                     print(f"⚠️ torch.compile T3 failed: {e}\n")
             else:
-                # Windows không hỗ trợ Triton — dùng channels_last thay thế.
-                # Áp dụng lên model attributes (không phải local variables!)
-                # vì model = cls(...) đã được tạo ở trên và lưu tham chiếu.
+                # Ép toàn bộ các model thành phần (T3, S3Gen, VE) sang độ phân giải FP32
+                # để ngăn chặn mọi rủi ro tràn số/làm tròn số nếu tệp gốc là FP16
                 for _name, _module in [("t3", model.t3), ("s3gen", model.s3gen), ("ve", model.ve)]:
-                    try:
-                        converted = _module.to(memory_format=torch.channels_last)
-                        setattr(model, _name, converted)
-                        print(f"⚡ Windows: {_name} → channels_last memory layout\n")
-                    except Exception:
-                        pass  # Pure transformer — channels_last không áp dụng, bỏ qua
+                    setattr(model, _name, _module.to(dtype=torch.float32))
+                print("⚡ Windows: Chạy Eager mode FP32 mặc định, ưu tiên ĐỘ CHÍNH XÁC TUYỆT ĐỐI\n")
 
         # Load default conditioning nếu có sẵn
         conds_path = ckpt_dir / "conds.pt"
