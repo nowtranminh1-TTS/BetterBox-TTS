@@ -208,6 +208,11 @@ def getDurationOfText(text: str) -> float:
     return getDuration / 1000.0
 """
 
+def get_list_word(word: str) -> list:
+    # Chuẩn hóa về dạng 'dựng sẵn' để các chữ có dấu không bị tách rời
+    word = unicodedata.normalize('NFC', word)
+    return list(word)
+
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
 # HẠN CHẾ FIX CHỖ NÀY, VÌ DEV ĐÃ FIX SAO CHO ÂM THANH ĐẦU RA LÀ CHÍNH XÁC NHẤT - ƯU TIÊN ĐỘ CHÍNH XÁC
@@ -232,11 +237,20 @@ def inferWithModelOmni(
     #print(f" 💰⏱️ Thời gian đọc text ước tính: {duration}ms\n")
 
     if len(text.strip().split()) == 1:
-        text = addConfigTextOmni(text)
-        print(f"\n🍂🎧text ĐƠN LẺ trước khi inference TTS {text}\n")
+       # text = clear(text)
+
+        listWord = get_list_word(text) # EX: 'chào' -> ['c', 'h', 'à', 'o']
+        listWord_lower = {w.casefold() for w in listWord}  # Ép toàn bộ danh sách về lower
+
+        if len(listWord_lower) == 2:
+            text = text + "..."   
+        else:
+            text = addConfigTextOmni(text)
+
+        print(f"\n🍂🎧text ĐƠN LẺ trước khi inference TTS: {text} có {len(listWord_lower)} chữ -> {listWord}\n")
     else:
         text = addConfigTextOmni(text)
-        print(f"\n🧩🎧🧩text PHRASE trước khi inference TTS {text}\n")
+        print(f"\n🧩🎧🧩text PHRASE trước khi inference TTS: {text}\n")
 
     print(f" 📑 Reference text cho voice: {ref_text}\n")
     # Chỉnh các tham số cho 'class OmniVoiceGenerationConfig' bên trong thư viện.
