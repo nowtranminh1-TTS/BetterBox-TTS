@@ -199,10 +199,9 @@ def generate_speech_omni(
         else:
             print(f"   [{idx+1}] ⏸  '{seg['content']}' → {seg['pause_ms']} ms")
 
-    # ── Build audio ────────────────────────────────────────────────────────
-    audio_pieces: list[np.ndarray] = []
-    join_before:  list[str]        = []
-    pending_join: str              = "sentence"
+    # ── Build audio (single-pass: generate + concat in-place) ─────────────
+    result: Optional[np.ndarray] = None   # kết quả tích lũy
+    pending_silence_ms: int      = 0      # khoảng lặng chờ trước segment TEXT tiếp theo
 
     # ── Create SRT file ─────────────────────────────────────────────────────
     arrSrt: list[dict]      = []  # để làm file SRT, List chứa {startTime, endTime, text}
@@ -264,58 +263,55 @@ def generate_speech_omni(
 
             # [SRT FILE] Tạo timing item cho segment này
             segment_duration = len(audio_np) / omni.sampling_rate
-            start_time = current_time
-            end_time = current_time + segment_duration
-            
-            timing_item = {
-                "startTime": start_time,
-                "endTime": end_time,
-                "text": spoken
-            }
-            arrSrt.append(timing_item)
-            
-            # [SRT FILE]Cập nhật current_time cho segment tiếp theo
-            current_time = end_time
-            
-            print(f"  🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
-            if len(audio_np) > 0:
-                join_before.append(pending_join)
-                audio_pieces.append(audio_np)
-                pending_join = "sentence"
+
+            if segment_duration > 0:
+
+                # ── Thêm khoảng lặng trước segment này (nếu có dấu câu phía trước) ──
+                # pending_silence_ms được update ở dưới
+                if pending_silence_ms > 0:
+                    silence = np.zeros(int(omni.sampling_rate * pending_silence_ms / 1000), dtype=np.float32)
+                    current_time += pending_silence_ms / 1000.0
+                    pending_silence_ms = 0
+                else:
+                    silence = np.zeros(0, dtype=np.float32)
+
+                start_time = current_time
+                end_time = current_time + segment_duration
+
+                timing_item = {
+                    "startTime": start_time,
+                    "endTime": end_time,
+                    "text": spoken
+                }
+                arrSrt.append(timing_item)
+
+                # [SRT FILE] Cập nhật current_time cho segment tiếp theo
+                current_time = end_time
+
+                print(f"  🎵 Audio generated: {len(audio_np)} samples | {start_time:.3f}s - {end_time:.3f}s", flush=True)
+
+                # ── Ráp ngay vào result ────────────────────────────────────────
+                piece = audio_np.astype(np.float32)
+                if result is None:
+                    result = np.concatenate([silence, piece]) if len(silence) > 0 else piece
+                else:
+                    result = np.concatenate([result, silence, piece])
+                print(f"🔗 Concatenated: result len={len(result)}", flush=True)
+
+            else:
+                print(f"⚠️ Không tạo được âm thanh cho: {spoken}")
 
             # ---------------------đảm bảo CUDA ops xong hết-------------------------
             if torch.cuda.is_available():
                 torch.cuda.synchronize()   # đảm bảo CUDA ops xong hết
             # Không gọi empty_cache() ở đây để tránh phân mảnh VRAM và giảm tốc độ
         else:
-            # [SRT FILE] Cộng thời gian pause của dấu câu vào current_time
-            pause_seconds = seg['pause_ms'] / 1000.0
-            current_time = current_time + pause_seconds
+            # Tích lũy khoảng lặng từ dấu câu, sẽ được thêm vào trước segment TEXT tiếp theo
+            pending_silence_ms += seg['pause_ms']
 
-            pending_join = f"pause:{seg['pause_ms']}"
-
- # --------------------------------xử lý hậu kỳ + nối các chuỗi âm thanh rời rạc ----------------------------------------
-    if not audio_pieces:
+    # --------------------------------kiểm tra kết quả ----------------------------------------
+    if result is None:
         return None, "❌ Không tạo được âm thanh từ text", None
-
-    print(f"\n🔢 🧩 count audio_pieces: {len(audio_pieces)}, count join_before: {len(join_before)}")
-    for idx, piece in enumerate(audio_pieces):
-        print(f"   audio_pieces[{idx}]: shape={piece.shape}, dtype={piece.dtype}")
-    print(f"   join_before: {join_before}")
-
-    #-------- nối các chuỗi âm thanh rời rạc
-    result = audio_pieces[0].astype(np.float32)
-    for i in range(1, len(audio_pieces)):
-        rule = join_before[i]
-        # Nếu không có pause explicit thì nối liền tự nhiên, không ép silence
-        if isinstance(rule, str) and rule.startswith("pause:"):
-            ms = int(rule.split(":")[1])   # có dấu câu, cần add khoảng lặng
-        else:
-            ms = 0                          # không có dấu câu, không cần add khoảng lặng
-        silence = np.zeros(int(omni.sampling_rate * ms / 1000), dtype=np.float32)
-        piece = audio_pieces[i].astype(np.float32)
-        result  = np.concatenate([result, silence, piece])
-        print(f"🔗Concatenated piece {i}: result len={len(result)}")
 
     # KHÔNG SỬ DỤNG 'fix_silent_and_speed_audio'. 
     # vì user nhập dấu câu thế nào thì khoảng lặng giữa các câu giữ nguyên như config
