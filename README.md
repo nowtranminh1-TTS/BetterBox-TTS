@@ -48,6 +48,10 @@ https://huggingface.co/khanhld/chunkformer-ctc-large-vie/tree/main
 # 🔧 tải model Omnivoice (bản fine-tune tiếng việt) và đưa vào folder 'OmniVoice/modelOmniLocal' 
 https://huggingface.co/splendor1811/omnivoice-vietnamese/tree/main
 
+update: có dev mới làm một model Omnivoice cho tiếng việt mới ở: 
+https://huggingface.co/kjanh/KhanhTTS-OmniVoice
+
+(tải bản này cũng được, chất lượng cao hơn do fine-tune kỹ hơn)
 
 # 🔧 hoặc (Optional), tải model Omnivoice (bản gốc) và đưa vào folder 'OmniVoice/modelOmniLocal' 
 https://huggingface.co/k2-fsa/OmniVoice/tree/main
