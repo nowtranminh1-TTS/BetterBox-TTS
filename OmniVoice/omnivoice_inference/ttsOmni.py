@@ -54,7 +54,6 @@ from general.general_tool_audio import (  # type: ignore
     SEGMENT_TEXT,
     get_reference_sound,
     segment_text,
-    normalize_text,
     fix_silent_and_speed_audio,
     clearText,
     create_srt_file
@@ -181,8 +180,7 @@ def generate_speech_omni(
         reference_audio = str(ref_path)
 
     # ── Preprocess text ────────────────────────────────────────────────────
-    text = clearText(text)
-    text = normalize_text(text, language)
+    text = clearText(text, language)
 
     # Segment — tách câu theo dấu câu
     segments = segment_text(text)

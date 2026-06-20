@@ -4,7 +4,6 @@ import unicodedata
 
 from general.general_tool_audio import(
     clearText, 
-    normalize_text
 )
 
 def get_list_word(word: str) -> list:
@@ -15,7 +14,6 @@ def get_list_word(word: str) -> list:
 def getNumberTokenText(content: str, input_token_count: int) -> int:
     # Xử lý text - BUỘC PHẢI CÓ ĐỂ CHUẨN HÓA
     getContent = clearText(content)
-    getContent = normalize_text(getContent)
 
     bunchOfText = getContent.split()
 
@@ -51,7 +49,6 @@ def number_token_for_single_word(number_of_words: int,
                                 input_token_count: int) -> int:
     # Xử lý text - BUỘC PHẢI CÓ ĐỂ CHUẨN HÓA
     text = clearText(text)
-    text = normalize_text(text)
     text = text.casefold()  # đảm bảo chữ thường hết
 
     getNormal = min(int(input_token_count), 1000) # lấy full

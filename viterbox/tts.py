@@ -27,7 +27,6 @@ from general.general_tool_audio import (
     SEGMENT_TEXT,
     get_reference_sound,
     segment_text,
-    normalize_text,
     fix_silent_and_speed_audio,
     clearText,
     create_srt_file,
@@ -297,8 +296,7 @@ class Viterbox(ViterboxExtensionMixin):
             print(f"🤖 🎭 emotion_adv viterbox = {exaggeration} | cfg={cfg_weight}, temp={temperature}, top_p={top_p}, rep_pen={repetition_penalty}, speed={speed}, pitch={pitch_shift}\n")
 
         # ── Preprocess text ────────────────────────────────────────────────────
-        text = clearText(text)
-        text = normalize_text(text, language)
+        text = clearText(text, language)
 
         # Segment — tách câu theo dấu câu
         segments = segment_text(text)
@@ -476,8 +474,7 @@ class Viterbox(ViterboxExtensionMixin):
     ) -> tuple:
         spoken = seg["content"]
 
-        getContent   = clearText(spoken.casefold())
-        getContent   = normalize_text(getContent, language)
+        getContent   = clearText(spoken.casefold(), language)
         bunchOfText  = getContent.split()
 
         print(f"\n  🔊📢🔊 Viterbox Generating: {spoken}")

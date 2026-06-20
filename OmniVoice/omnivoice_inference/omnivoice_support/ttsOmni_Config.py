@@ -176,38 +176,6 @@ def addConfigTextOmni(text: str) -> str:
 
     return text
 
-"""
-def get_list_word(word: str) -> list:
-    # Chuẩn hóa về dạng 'dựng sẵn' để các chữ có dấu không bị tách rời
-    word = unicodedata.normalize('NFC', word)
-    return list(word)
-
-def getDurationOfText(text: str) -> float: 
-    text = clearText(text)
-    text = text.casefold()  # đảm bảo chữ thường hết
-    
-    getDuration = 0
-
-    # tách text thành danh sách các chữ/từ
-    numberOfWords = text.split()  # ← ĐỔI len(text) → text.split()
-
-    print(f" 📝 số chữ trong text là: {len(numberOfWords)}\n")  # ← in len() để đếm
-
-    for item in numberOfWords:  # bây giờ item là từng từ (str), iterate được
-
-        # số ký tự trong một chữ 
-        countCharacter = len(get_list_word(item))
-
-        timeForOneWord = _ONE_SPEECH_TIME * countCharacter
-
-        getDuration = getDuration + timeForOneWord
-        
-        print(f" 🏷️số từ trong chữ: {item}, là: {countCharacter}, 🕒thời gian cho chữ đó: {timeForOneWord}\n")
-
-    # model.generate() nhận duration theo giây (seconds), nên phải chia 1000
-    return getDuration / 1000.0
-"""
-
 def get_list_word(word: str) -> list:
     # Chuẩn hóa về dạng 'dựng sẵn' để các chữ có dấu không bị tách rời
     word = unicodedata.normalize('NFC', word)

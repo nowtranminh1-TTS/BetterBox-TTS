@@ -101,10 +101,13 @@ def segment_text(text: str) -> List[dict]:
 
     return merged
 
-def clearText(text: str) -> str:
+def clearText(text: str, language: str = "en") -> str:
 
  # Chuyển toàn bộ về chữ thường
     text = text.casefold()
+
+    if language.lower() == "vi" :
+        text = convertNumuberToVietNamText(text)
 
     original = text
 
@@ -144,9 +147,147 @@ def addConfigText(text: str) -> str:
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-def normalize_text(text: str, language: str = "vi") -> str:
-    """Normalize text hook (currently pass-through)."""
-    return text
+def convertNumuberToVietNamText(text: str) -> str:
+    """
+    trong hàm này, sẽ convert những con số sang tiếng việt.
+    Ví dụ về quy luật như sau:  
+    số 1 -> thì thành 'một'
+    số 11 -> thì thành 'mười một'
+    số 111 -> thì thành 'một trăm mười một'
+    số 1111 -> thì thành 'một ngàn một trăm mười một'
+
+    nếu câu sau: 'hôm nay là thứ 6, ngày 12 tháng 11 năm 1234' -> thì câu sau khi chuyển là: 'hôm nay là thứ sáu, ngày mười hai tháng mười một năm một ngàn hai trăm ba mươi tư' 
+    """
+    def num_to_vietnamese(n: int) -> str:
+        if n == 0:
+            return "không"
+            
+        digit_names = {
+            0: "không",
+            1: "một",
+            2: "hai",
+            3: "ba",
+            4: "bốn",
+            5: "năm",
+            6: "sáu",
+            7: "bảy",
+            8: "tám",
+            9: "chín"
+        }
+        
+        # unit names when tens digit is 1
+        unit_names_ten_1 = {
+            0: "",
+            1: "một",
+            2: "hai",
+            3: "ba",
+            4: "bốn",
+            5: "lăm",
+            6: "sáu",
+            7: "bảy",
+            8: "tám",
+            9: "chín"
+        }
+        
+        # unit names when tens digit is > 1
+        unit_names_ten_gt1 = {
+            0: "",
+            1: "mốt",
+            2: "hai",
+            3: "ba",
+            4: "tư",
+            5: "lăm",
+            6: "sáu",
+            7: "bảy",
+            8: "tám",
+            9: "chín"
+        }
+        
+        group_units = ["", "ngàn", "triệu", "tỷ", "ngàn tỷ", "triệu tỷ", "tỷ tỷ"]
+        
+        n_str = str(n)
+        
+        groups = []
+        while n_str:
+            groups.append(n_str[-3:])
+            n_str = n_str[:-3]
+            
+        group_words = []
+        for i, group in enumerate(groups):
+            digits = [int(d) for d in group]
+            is_leading = (i == len(groups) - 1)
+            
+            if sum(digits) == 0:
+                continue
+                
+            words = []
+            if is_leading:
+                if len(digits) == 1:
+                    u = digits[0]
+                    words.append(digit_names[u])
+                elif len(digits) == 2:
+                    t, u = digits
+                    if t == 1:
+                        words.append("mười")
+                        if u != 0:
+                            words.append(unit_names_ten_1[u])
+                    else:
+                        words.append(digit_names[t])
+                        words.append("mươi")
+                        if u != 0:
+                            words.append(unit_names_ten_gt1[u])
+                elif len(digits) == 3:
+                    h, t, u = digits
+                    words.append(digit_names[h])
+                    words.append("trăm")
+                    if t == 0 and u == 0:
+                        pass
+                    elif t == 0 and u > 0:
+                        words.append("lẻ")
+                        words.append(digit_names[u])
+                    elif t == 1:
+                        words.append("mười")
+                        if u != 0:
+                            words.append(unit_names_ten_1[u])
+                    else:
+                        words.append(digit_names[t])
+                        words.append("mươi")
+                        if u != 0:
+                            words.append(unit_names_ten_gt1[u])
+            else:
+                h, t, u = digits
+                words.append(digit_names[h])
+                words.append("trăm")
+                if t == 0 and u == 0:
+                    pass
+                elif t == 0 and u > 0:
+                    words.append("lẻ")
+                    words.append(digit_names[u])
+                elif t == 1:
+                    words.append("mười")
+                    if u != 0:
+                        words.append(unit_names_ten_1[u])
+                else:
+                    words.append(digit_names[t])
+                    words.append("mươi")
+                    if u != 0:
+                        words.append(unit_names_ten_gt1[u])
+                        
+            if group_units[i]:
+                words.append(group_units[i])
+                
+            group_words.append(" ".join(w for w in words if w))
+            
+        group_words.reverse()
+        return " ".join(group_words)
+
+    def replace_match(m):
+        num_str = m.group(0)
+        viet_text = num_to_vietnamese(int(num_str))
+        print(f"  🔢 Số: {num_str} -> Chữ: {viet_text}")
+        return viet_text
+
+    return re.sub(r'\d+', replace_match, text)
 
 
 def fix_silent_and_speed_audio(
