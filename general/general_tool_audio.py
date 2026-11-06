@@ -10,7 +10,7 @@ import librosa
 # Pause durations (ms) per punctuation class
 _PUNCT_PAUSE_MS = {
     ".":  450, "!": 450, "?": 450, "。": 450, "！": 450, "？": 450,
-    ",":  200, "，": 150, "、": 200,
+    ",":  80, "，": 80, "、": 200,
     ";":  250, "；": 250,
     ":":  200, "：": 200,
     "/":  150, "…": 300, "-": 120, "—": 150, "–": 150,
@@ -34,7 +34,7 @@ SEGMENT_TEXT  = "text"    # A spoken clause → run through T3 + S3
 SEGMENT_PAUSE = "pause"   # A punctuation mark → insert silence
 
 def _pause_ms_for(punct: str) -> int:
-    return _PUNCT_PAUSE_MS.get(punct, 150)
+    return _PUNCT_PAUSE_MS.get(punct, 80)
 
 # ── Audio helpers ─────────────────────────────────────────
 
